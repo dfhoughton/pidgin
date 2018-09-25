@@ -5,6 +5,11 @@ extern crate lazy_static;
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::BTreeMap;
 
+lazy_static! {
+    static ref ATOMIC: Regex =
+        Regex::new(r"\A(?:\[(?:[^\]]|\\.)+\]|\((?:[^)]|\\.)+\)|\\?.)\z").unwrap();
+}
+
 #[derive(Clone)]
 pub struct Pidgin {
     symbols: BTreeMap<Symbol, String>,
@@ -29,11 +34,72 @@ impl Pidgin {
         }
         exp
     }
-    fn recursive_compile(&self, phrases: &mut Vec<Vec<Expression>>) -> Vec<Expression> {
-        if phrases.len() == 1 {
-            return phrases[0].clone();
+    fn compress(&self, mut phrase: Vec<Expression>) -> Vec<Expression> {
+        if phrase.len() < 2 {
+            return phrase;
         }
-        let (mut prefix, mut suffix) = self.common_adfixes(phrases);
+        let mut rep_length = 1;
+        while rep_length <= phrase.len() / 2 {
+            let mut v = Vec::with_capacity(phrase.len());
+            let mut i = 0;
+            while i < phrase.len() {
+                let mut match_length = 1;
+                let mut j = i + rep_length;
+                'outer: while j <= phrase.len() - rep_length {
+                    for k in 0..rep_length {
+                        if phrase[i + k] != phrase[j + k] {
+                            break 'outer;
+                        }
+                    }
+                    match_length += 1;
+                    j += rep_length;
+                }
+                if match_length > 1 {
+                    let mut s = phrase[i..i + rep_length]
+                        .iter()
+                        .map(Expression::to_string)
+                        .collect::<Vec<String>>()
+                        .join("");
+                    let existing_length = s.len();
+                    let atomy = ATOMIC.is_match(&s);
+                    let threshold_length = if atomy {
+                        existing_length + 3
+                    } else {
+                        existing_length + 7
+                    };
+                    if threshold_length <= existing_length * match_length {
+                        if atomy {
+                            s = format!("{}{{{l}}}", s, l = match_length);
+                        } else {
+                            s = format!("(?:{}){{{l}}}", s, l = match_length);
+                        }
+                        v.push(Expression::Part(s, false));
+                    } else {
+                        for j in 0..(match_length * rep_length) {
+                            v.push(phrase[i + j].clone());
+                        }
+                    }
+                    i += match_length * rep_length;
+                } else {
+                    v.push(phrase[i].clone());
+                    i += 1;
+                }
+            }
+            phrase = v;
+            rep_length += 1;
+        }
+        phrase
+    }
+    fn recursive_compile(&self, phrases: &mut Vec<Vec<Expression>>) -> Vec<Expression> {
+        if phrases.len() == 0 {
+            return Vec::new();
+        }
+        if phrases.len() == 1 {
+            return self.compress(phrases[0].clone());
+        }
+        let (prefix, suffix) = self.common_adfixes(phrases);
+        let mut prefix = self.compress(prefix);
+        let mut suffix = self.compress(suffix);
         phrases.sort();
         let mut map: BTreeMap<&Expression, Vec<&Vec<Expression>>> = BTreeMap::new();
         let mut optional = false;
@@ -111,11 +177,7 @@ impl Pidgin {
             };
             let e = &phrases[0][index];
             for v in &phrases[1..phrases.len()] {
-                let index = if inverted {
-                    i
-                } else {
-                    v.len() - i - 1
-                };
+                let index = if inverted { i } else { v.len() - i - 1 };
                 if e != &v[index] {
                     break 'outer2;
                 }
@@ -348,10 +410,6 @@ impl Expression {
             Expression::Raw(s) => s.clone(),
         };
         if self.is_optional() {
-            lazy_static! {
-                static ref ATOMIC: Regex =
-                    Regex::new(r"\A(?:\[(?:[^\]]|\\.)+\]|\((?:[^)]|\\.)+\)|\\?.)\z").unwrap();
-            }
             if ATOMIC.is_match(s.as_ref()) {
                 s + "?"
             } else {

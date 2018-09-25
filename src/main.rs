@@ -1,11 +1,10 @@
+use std::env;
 extern crate pidgin;
 use pidgin::Pidgin;
 fn main() {
-    // let mut v = vec!["cat", "dog", "bat"];
-    // println!("{}", v.join(","));
-    // v.sort();
-    // for s in v {
-    //     println!("{}", s);
-    // }
-    println!("{}", Pidgin::new().compile(&["a cog", "a dog", "a hog", "a frog","an og"]));
+    let args: Vec<String> = env::args().skip(1).collect();
+    println!(
+        "{}",
+        Pidgin::new().compile(&args.iter().map(String::as_str).collect::<Vec<&str>>())
+    );
 }
