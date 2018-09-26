@@ -90,6 +90,49 @@ impl Pidgin {
         }
         phrase
     }
+    fn find_character_classes(&self, mut phrases: Vec<Vec<Expression>>) -> Vec<Vec<Expression>> {
+        let mut char_count = 0;
+        for v in &phrases {
+            if v.len() > 1 {
+                break;
+            }
+            if let Expression::Char(_, _) = v[0] {
+                char_count += 1;
+            } else {
+                break;
+            }
+        }
+        if char_count < 2 {
+            return phrases;
+        }
+        if char_count == phrases.len() {
+            let e = Expression::Part(format!("[{}]", self.to_character_class(&phrases)),false);
+            return vec![vec![e]]
+        } else if char_count > 2 {
+            let e = Expression::Part(format!("[{}]", self.to_character_class(&phrases[0..char_count])),false);
+            let mut v = vec![vec![e]];
+            let l = phrases.len();
+            v.append(&mut phrases[char_count..l].to_vec());
+            return v
+        } else {
+            return phrases;
+        }
+    }
+    fn to_character_class(&self, phrases: &[Vec<Expression>]) -> String {
+        phrases
+            .iter()
+            .map(|v| match v[0] {
+                Expression::Char(c, _) => self.character_class_escape(c),
+                _ => panic!("we should never get here"),
+            }).collect::<Vec<String>>()
+            .join("")
+    }
+    fn character_class_escape(&self, c: char) -> String {
+        match c {
+            '\\' | '-' | '[' | '^' | ']' => format!("\\{}", c),
+            _ => format!("{}", c),
+        }
+    }
     fn recursive_compile(&self, phrases: &mut Vec<Vec<Expression>>) -> Vec<Expression> {
         if phrases.len() == 0 {
             return Vec::new();
@@ -120,6 +163,7 @@ impl Pidgin {
             rv.push(self.recursive_compile(&mut v));
         }
         rv.sort();
+        rv = self.find_character_classes(rv);
         // should pull out character classes at this point
         let alternates: Vec<Expression> = rv
             .iter()
