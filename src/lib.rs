@@ -30,7 +30,7 @@ impl Pidgin {
         phrases.sort();
         phrases.dedup();
         for e in self.recursive_compile(phrases.as_mut()) {
-            exp += e.to_string().as_str();
+            exp += &e.to_string();
         }
         exp
     }
@@ -387,9 +387,6 @@ fn vec_sort(a: &Vec<Expression>, b: &Vec<Expression>) -> Ordering {
         return o;
     }
     for i in 0..a.len() {
-        if i == b.len() {
-            return Ordering::Greater;
-        }
         let o = a[i].cmp(&b[i]);
         if o != Ordering::Equal {
             return o;
@@ -503,7 +500,7 @@ impl Expression {
     }
     fn to_string(&self) -> String {
         let s = match self {
-            Expression::Char(c, _) => escape(c.to_string().as_ref()),
+            Expression::Char(c, _) => escape(&c.to_string()),
             Expression::Alternation(v, _) => {
                 if v.len() == 1 {
                     v[0].to_string()
@@ -513,7 +510,7 @@ impl Expression {
                         if i > 0 {
                             s.push('|');
                         }
-                        s += e.to_string().as_str();
+                        s += &e.to_string();
                     }
                     s.push(')');
                     s
@@ -523,10 +520,10 @@ impl Expression {
             Expression::Raw(s) => s.clone(),
         };
         if self.is_optional() {
-            if ATOMIC.is_match(s.as_ref()) {
+            if ATOMIC.is_match(&s) {
                 s + "?"
             } else {
-                String::from("(:?") + s.as_ref() + ")?"
+                String::from("(:?") + &s + ")?"
             }
         } else {
             s
