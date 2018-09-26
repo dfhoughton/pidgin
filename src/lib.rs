@@ -106,24 +106,69 @@ impl Pidgin {
             return phrases;
         }
         if char_count == phrases.len() {
-            let e = Expression::Part(format!("[{}]", self.to_character_class(&phrases)),false);
-            return vec![vec![e]]
+            let e = Expression::Part(format!("[{}]", self.to_character_class(&phrases)), false);
+            return vec![vec![e]];
         } else if char_count > 2 {
-            let e = Expression::Part(format!("[{}]", self.to_character_class(&phrases[0..char_count])),false);
+            let e = Expression::Part(
+                format!("[{}]", self.to_character_class(&phrases[0..char_count])),
+                false,
+            );
             let mut v = vec![vec![e]];
             let l = phrases.len();
             v.append(&mut phrases[char_count..l].to_vec());
-            return v
+            return v;
         } else {
             return phrases;
         }
     }
+    fn char_ranges(&self, chars: Vec<char>) -> Vec<CharRange> {
+        let mut v: Vec<CharRange> = Vec::with_capacity(chars.len());
+        let mut c1i = chars[0] as u8;
+        let mut li = c1i;
+        let l = chars.len();
+        for c2 in chars[1..l].iter() {
+            let c2i = *c2 as u8;
+            if c2i - 1 == li {
+                li = c2i;
+            } else {
+                if c1i + 1 < li {
+                    v.push(CharRange::CC(c1i as char, li as char));
+                } else if c1i == li {
+                    v.push(CharRange::C(c1i as char));
+                } else {
+                    v.push(CharRange::C(c1i as char));
+                    v.push(CharRange::C(li as char));
+                }
+                c1i = c2i;
+                li = c2i;
+            }
+        }
+        if c1i + 1 < li {
+            v.push(CharRange::CC(c1i as char, li as char));
+        } else if c1i == li {
+            v.push(CharRange::C(c1i as char));
+        } else {
+            v.push(CharRange::C(c1i as char));
+            v.push(CharRange::C(li as char));
+        }
+        v
+    }
     fn to_character_class(&self, phrases: &[Vec<Expression>]) -> String {
-        phrases
+        let cv: Vec<char> = phrases
             .iter()
             .map(|v| match v[0] {
-                Expression::Char(c, _) => self.character_class_escape(c),
+                Expression::Char(c, _) => c,
                 _ => panic!("we should never get here"),
+            }).collect();
+        self.char_ranges(cv)
+            .iter()
+            .map(|cr| match cr {
+                CharRange::C(c) => self.character_class_escape(*c),
+                CharRange::CC(c1, c2) => format!(
+                    "{}-{}",
+                    self.character_class_escape(*c1),
+                    self.character_class_escape(*c2)
+                ),
             }).collect::<Vec<String>>()
             .join("")
     }
@@ -162,7 +207,7 @@ impl Pidgin {
             let mut v = v.iter().map(|v| (*v).clone()).collect();
             rv.push(self.recursive_compile(&mut v));
         }
-        rv.sort();
+        rv.sort_by(vec_sort);
         rv = self.find_character_classes(rv);
         // should pull out character classes at this point
         let alternates: Vec<Expression> = rv
@@ -332,6 +377,30 @@ impl Pidgin {
     fn init(&self, phrases: &[&str]) -> Vec<Vec<Expression>> {
         phrases.iter().map(|s| self.digest(s)).collect()
     }
+}
+// sort simple stuff first
+// this makes it easier to find character ranges, and has the side effect of
+// putting the stuff easier to match earlier in alternations
+fn vec_sort(a: &Vec<Expression>, b: &Vec<Expression>) -> Ordering {
+    let o = a.len().cmp(&b.len());
+    if o != Ordering::Equal {
+        return o;
+    }
+    for i in 0..a.len() {
+        if i == b.len() {
+            return Ordering::Greater;
+        }
+        let o = a[i].cmp(&b[i]);
+        if o != Ordering::Equal {
+            return o;
+        }
+    }
+    Ordering::Equal
+}
+
+enum CharRange {
+    C(char),
+    CC(char, char),
 }
 
 #[derive(Clone)]
