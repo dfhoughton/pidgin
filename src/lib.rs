@@ -174,7 +174,7 @@ impl Pidgin {
     }
     fn character_class_escape(&self, c: char) -> String {
         match c {
-            '\\' | '-' | '[' | '^' | ']' => format!("\\{}", c),
+            '\\' | '-' | '[' | '^' | ']' | '&' | '~' => format!("\\{}", c),
             _ => format!("{}", c),
         }
     }
