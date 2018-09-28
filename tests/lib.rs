@@ -97,3 +97,90 @@ fn complex_repeat() {
     assert_eq!("(?:a{4}b{4}){2}", &pattern);
     all_equal(&words, &pattern);
 }
+
+#[test]
+fn simple_string_symbol_capturing() {
+    let words = vec!["foo"];
+    let mut p = Pidgin::new();
+    p.rule("foo", "bar");
+    let pattern = p.compile(&words);
+    assert_eq!("(?P<foo>bar)", pattern);
+}
+
+#[test]
+fn simple_string_symbol_non_capturing() {
+    let words = vec!["foo"];
+    let mut p = Pidgin::new();
+    p.nm_rule("foo", "bar");
+    let pattern = p.compile(&words);
+    assert_eq!("(?:bar)", pattern);
+}
+
+#[test]
+fn simple_rx_symbol_capturing() {
+    let words = vec!["foo bar"];
+    let mut p = Pidgin::new();
+    p.rx_rule(r"\s+", r"\s+", Some("ws"));
+    let pattern = p.compile(&words);
+    assert_eq!("foo(?P<ws>\\s+)bar", pattern);
+}
+
+#[test]
+fn simple_rx_symbol_non_capturing() {
+    let words = vec!["foo bar"];
+    let mut p = Pidgin::new();
+    p.rx_rule(r"\s+", r"\s+", None);
+    let pattern = p.compile(&words);
+    assert_eq!("foo(?:\\s+)bar", pattern);
+}
+
+#[test]
+fn string_string_symbol_ordering() {
+    let words = vec!["foo f"];
+    let mut p = Pidgin::new();
+    p.nm_rule("foo", "bar");
+    p.nm_rule("f", "plugh");
+    let pattern = p.compile(&words);
+    assert_eq!("(?:bar) (?:plugh)", pattern);
+}
+
+#[test]
+fn capturing_versus_non_capturing_symbol_ordering() {
+    let words = vec!["foo"];
+    let mut p = Pidgin::new();
+    p.rule("foo", "plugh");
+    p.nm_rule("foo", "bar");
+    let pattern = p.compile(&words);
+    assert_eq!("(?P<foo>plugh)", pattern);
+}
+
+#[test]
+fn string_regex_symbol_ordering() {
+    let words = vec!["foo f"];
+    let mut p = Pidgin::new();
+    p.rx_rule("foo", "bar", None);
+    p.nm_rule("f", "plugh");
+    let pattern = p.compile(&words);
+    assert_eq!("(?:plugh)oo (?:plugh)", pattern);
+}
+
+#[test]
+fn regex_regex_symbol_ordering() {
+    let words = vec!["foo f"];
+    let mut p = Pidgin::new();
+    p.rx_rule("foo", "bar", None);
+    p.rx_rule("f", "plugh", None);
+    let pattern = p.compile(&words);
+    assert_eq!("(?:bar) (?:plugh)", pattern);
+}
+
+#[test]
+fn normalize_whitespace() {
+    let words = vec!["foo bar", "baz   plugh"];
+    let mut p = Pidgin::new();
+    p.normalize_whitespace();
+    let pattern = p.compile(&words);
+    let rx = Regex::new(&pattern).unwrap();
+    assert!(rx.is_match("foo    bar"));
+    assert!(rx.is_match("baz plugh"));
+}

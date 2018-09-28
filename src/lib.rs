@@ -6,8 +6,25 @@ use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::BTreeMap;
 
 lazy_static! {
-    static ref ATOMIC: Regex =
-        Regex::new(r"\A(?:\[(?:[^\]]|\\.)+\]|\((?:[^)]|\\.)+\)|\\?.)\z").unwrap();
+    static ref ATOMIC: Regex = Regex::new(
+        r"(?x)
+            \A
+            (?:
+                .
+                    |
+                \[ (?: [^\]] | \\. )+ \]
+                    |
+                \( (?: [^)] | \\. )+ \)
+                    |
+                \\ (?: # there are more of these, but we only matching the less obscure ones
+                    [pP] (?: [a-zA-Z] | \{ [a-zA-Z]+ \})
+                        |
+                    .
+                )
+            )
+            \z
+        "
+    ).unwrap();
 }
 
 #[derive(Clone)]
@@ -21,8 +38,35 @@ impl Pidgin {
             symbols: BTreeMap::new(),
         }
     }
-    pub fn add_symbol(&mut self, s: Symbol, rx: String) {
-        self.symbols.insert(s, rx);
+    pub fn rule(&mut self, name: &str, pattern: &str) {
+        self.add_symbol(Symbol::S(name.to_string(), true), pattern);
+    }
+    pub fn nm_rule(&mut self, name: &str, pattern: &str) {
+        self.add_symbol(Symbol::S(name.to_string(), false), pattern);
+    }
+    pub fn rx_rule(
+        &mut self,
+        rx: &str,
+        pattern: &str,
+        name: Option<&str>,
+    ) -> Result<&mut Pidgin, regex::Error> {
+        match Regex::new(rx) {
+            Ok(rx) => {
+                let name = match name {
+                    Some(n) => Some(n.to_string()),
+                    None => None,
+                };
+                self.add_symbol(Symbol::Rx(rx, name), pattern);
+                Ok(self)
+            }
+            Err(e) => Err(e),
+        }
+    }
+    pub fn normalize_whitespace(&mut self) {
+        self.rx_rule(r"\s+", r"\s+", None).unwrap();
+    }
+    fn add_symbol(&mut self, s: Symbol, rx: &str) {
+        self.symbols.insert(s, rx.to_string());
     }
     pub fn compile(&self, phrases: &[&str]) -> String {
         let mut exp = String::new();
@@ -342,13 +386,16 @@ impl Pidgin {
                                         format!("(?:{})", val)
                                     }
                                 }
-                                for (i, s) in rx.split(s.as_str()).enumerate() {
-                                    if i > 0 {
-                                        nv.push(Expression::Part(replacement.clone(), false));
+                                let mut offset = 0;
+                                for m in rx.find_iter(&s) {
+                                    if m.start() > offset {
+                                        nv.push(Expression::Raw(s[offset..m.start()].to_string()));
                                     }
-                                    if s.len() > 0 {
-                                        nv.push(Expression::Raw(s.to_string()))
-                                    }
+                                    nv.push(Expression::Part(replacement.clone(), false));
+                                    offset = m.end();
+                                }
+                                if offset < s.len() {
+                                    nv.push(Expression::Raw(s[offset..s.len()].to_string()));
                                 }
                             } else {
                                 nv.push(Expression::Raw(s));
@@ -401,7 +448,7 @@ enum CharRange {
 }
 
 #[derive(Clone)]
-pub enum Symbol {
+enum Symbol {
     S(String, bool),           // String is name; bool is whether to capture this group
     Rx(Regex, Option<String>), // Option<String> is an optional name
 }
