@@ -177,10 +177,94 @@ fn regex_regex_symbol_ordering() {
 #[test]
 fn normalize_whitespace() {
     let words = vec!["foo bar", "baz   plugh"];
-    let mut p = Pidgin::new();
-    p.normalize_whitespace();
+    let p = Pidgin::new().normalize_whitespace();
     let pattern = p.compile(&words);
     let rx = Regex::new(&pattern).unwrap();
     assert!(rx.is_match("foo    bar"));
     assert!(rx.is_match("baz plugh"));
+}
+
+#[test]
+fn word_boundaries() {
+    let words = vec!["tardigrade", "onomatopoeia"];
+    let p = Pidgin::new().word_bound();
+    let pattern = p.compile(&words);
+    let rx = Regex::new(&pattern).unwrap();
+    for w in words {
+        assert!(rx.is_match(w));
+        let s = String::from("a") + w;
+        assert!(!rx.is_match(&s));
+        let s = w.to_string() + "a";
+        assert!(!rx.is_match(&s));
+        let s = String::from(" ") + w;
+        assert!(rx.is_match(&s));
+        let s = w.to_string() + " ";
+        assert!(rx.is_match(&s));
+    }
+}
+
+#[test]
+fn line_boundaries() {
+    let words = vec!["tardigrade", "onomatopoeia"];
+    let p = Pidgin::new().line_bound();
+    let pattern = p.compile(&words);
+    let rx = Regex::new(&pattern).unwrap();
+    for w in words {
+        assert!(rx.is_match(w), format!("{} matches '{}", pattern, w));
+        let s = String::from(" ") + w;
+        assert!(
+            !rx.is_match(&s),
+            format!("{} doesn't match '{}' with space before", pattern, w)
+        );
+        let s = w.to_string() + " ";
+        assert!(
+            !rx.is_match(&s),
+            "{} doesn't match '{}' with space after",
+            pattern,
+            w
+        );
+        let s = String::from("\n") + w;
+        assert!(
+            rx.is_match(&s),
+            format!("{} matches '{}' with newline before", pattern, w)
+        );
+        let s = w.to_string() + "\n";
+        assert!(
+            rx.is_match(&s),
+            format!("{} matches '{}' with newline after", pattern, w)
+        );
+    }
+}
+
+#[test]
+fn string_boundaries() {
+    let words = vec!["tardigrade", "onomatopoeia"];
+    let p = Pidgin::new().string_bound();
+    let pattern = p.compile(&words);
+    let rx = Regex::new(&pattern).unwrap();
+    for w in words {
+        assert!(rx.is_match(w), format!("{} matches '{}", pattern, w));
+        let s = String::from(" ") + w;
+        assert!(
+            !rx.is_match(&s),
+            format!("{} doesn't match '{}' with space before", pattern, w)
+        );
+        let s = w.to_string() + " ";
+        assert!(
+            !rx.is_match(&s),
+            "{} doesn't match '{}' with space after",
+            pattern,
+            w
+        );
+        let s = String::from("\n") + w;
+        assert!(
+            !rx.is_match(&s),
+            format!("{} doesn't match '{}' with newline before", pattern, w)
+        );
+        let s = w.to_string() + "\n";
+        assert!(
+            !rx.is_match(&s),
+            format!("{} doesn't match '{}' with newline after", pattern, w)
+        );
+    }
 }

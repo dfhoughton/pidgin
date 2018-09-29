@@ -16,7 +16,7 @@ lazy_static! {
                     |
                 \( (?: [^)] | \\. )+ \)
                     |
-                \\ (?: # there are more of these, but we only matching the less obscure ones
+                \\ (?: # there are more of these, but we only match the less obscure ones
                     [pP] (?: [a-zA-Z] | \{ [a-zA-Z]+ \})
                         |
                     .
@@ -29,12 +29,16 @@ lazy_static! {
 
 #[derive(Clone)]
 pub struct Pidgin {
+    left: Option<Boundary>,
+    right: Option<Boundary>,
     symbols: BTreeMap<Symbol, String>,
 }
 
 impl Pidgin {
     pub fn new() -> Pidgin {
         Pidgin {
+            left: None,
+            right: None,
             symbols: BTreeMap::new(),
         }
     }
@@ -62,8 +66,91 @@ impl Pidgin {
             Err(e) => Err(e),
         }
     }
-    pub fn normalize_whitespace(&mut self) {
+    pub fn normalize_whitespace(mut self) -> Pidgin {
         self.rx_rule(r"\s+", r"\s+", None).unwrap();
+        self
+    }
+    pub fn word_bound(mut self) -> Pidgin {
+        self.left = Some(Boundary::Word);
+        self.right = Some(Boundary::Word);
+        self
+    }
+    pub fn left_word_bound(mut self) -> Pidgin {
+        self.left = Some(Boundary::Word);
+        self
+    }
+    pub fn right_word_bound(mut self) -> Pidgin {
+        self.right = Some(Boundary::Word);
+        self
+    }
+    pub fn line_bound(mut self) -> Pidgin {
+        self.left = Some(Boundary::Line);
+        self.right = Some(Boundary::Line);
+        self
+    }
+    pub fn left_line_bound(mut self) -> Pidgin {
+        self.left = Some(Boundary::Line);
+        self
+    }
+    pub fn right_line_bound(mut self) -> Pidgin {
+        self.right = Some(Boundary::Line);
+        self
+    }
+    pub fn string_bound(mut self) -> Pidgin {
+        self.left = Some(Boundary::String);
+        self.right = Some(Boundary::String);
+        self
+    }
+    fn add_boundary_symbols(&self, phrase: &str) -> Vec<Expression> {
+        let lb = if let Some(b) = &self.left {
+            match b {
+                Boundary::Word => {
+                    if phrase.len() > 0 {
+                        let c = phrase.chars().next().unwrap();
+                        if c.is_alphanumeric() || c == '_' {
+                            Some(Expression::Part(String::from(r"\b"), false))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                }
+                Boundary::Line => Some(Expression::Part(String::from("(?m)^"), false)),
+                Boundary::String => Some(Expression::Part(String::from(r"\A"), false)),
+            }
+        } else {
+            None
+        };
+        let rb = if let Some(b) = &self.right {
+            match b {
+                Boundary::Word => {
+                    if phrase.len() > 0 {
+                        let c = phrase.chars().last().unwrap();
+                        if c.is_alphanumeric() || c == '_' {
+                            Some(Expression::Part(String::from(r"\b"), false))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                }
+                Boundary::Line => Some(Expression::Part(String::from("$"), false)),
+                Boundary::String => Some(Expression::Part(String::from(r"\z"), false)),
+            }
+        } else {
+            None
+        };
+        let mut v = Vec::with_capacity(3);
+        if let Some(e) = lb {
+            v.push(e);
+        }
+        v.push(Expression::Raw(phrase.to_string()));
+        if let Some(e) = rb {
+            v.push(e);
+        }
+        v
     }
     fn add_symbol(&mut self, s: Symbol, rx: &str) {
         self.symbols.insert(s, rx.to_string());
@@ -347,8 +434,7 @@ impl Pidgin {
     }
     // initialize
     fn digest(&self, s: &str) -> Vec<Expression> {
-        let mut rv = Vec::new();
-        rv.push(Expression::Raw(s.to_string()));
+        let mut rv = self.add_boundary_symbols(s);
         // apply the symbols to the strings
         for (sym, val) in self.symbols.iter() {
             let mut replacement = String::from("");
@@ -667,3 +753,11 @@ impl PartialEq for Expression {
 }
 
 impl Eq for Expression {}
+
+// boundary patterns to attach to words
+#[derive(Clone)]
+enum Boundary {
+    String,
+    Line,
+    Word,
+}
