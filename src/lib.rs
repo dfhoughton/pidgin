@@ -5,33 +5,37 @@ extern crate lazy_static;
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::BTreeMap;
 
-lazy_static! {
-    static ref ATOMIC: Regex = Regex::new(
-        r"(?x)
-            \A
-            (?:
-                .
-                    |
-                \[ (?: [^\]] | \\. )+ \]
-                    |
-                \( (?: [^)] | \\. )+ \)
-                    |
-                \\ (?: # there are more of these, but we only match the less obscure ones
-                    [pP] (?: [a-zA-Z] | \{ [a-zA-Z]+ \})
-                        |
+fn is_atomic(s: &str) -> bool {
+    lazy_static! {
+        static ref ATOMIC: Regex = Regex::new(
+            r"(?x)
+                \A
+                (?:
                     .
+                        |
+                    \[ (?: [^\]] | \\. )+ \]
+                        |
+                    \( (?: [^)] | \\. )+ \)
+                        |
+                    \\ (?: # there are more of these, but we only match the less obscure ones
+                        [pP] (?: [a-zA-Z] | \{ [a-zA-Z]+ \})
+                            |
+                        .
+                    )
                 )
-            )
-            \z
-        "
-    ).unwrap();
+                \z
+            "
+        ).unwrap();
+    }
+    ATOMIC.is_match(s)
 }
 
 #[derive(Clone)]
 pub struct Pidgin {
     left: Option<Boundary>,
     right: Option<Boundary>,
-    symbols: BTreeMap<Symbol, String>,
+    symbols: BTreeMap<Symbol, Vec<String>>,
+    phrases: Vec<String>,
 }
 
 impl Pidgin {
@@ -40,7 +44,17 @@ impl Pidgin {
             left: None,
             right: None,
             symbols: BTreeMap::new(),
+            phrases: Vec::new(),
         }
+    }
+    pub fn add(&mut self, phrases: &[&str]) {
+        for w in phrases {
+            self.phrases.push(w.to_string());
+        }
+    }
+    pub fn clear(&mut self) {
+        self.symbols.clear();
+        self.phrases.clear();
     }
     pub fn rule(&mut self, name: &str, pattern: &str) {
         self.add_symbol(Symbol::S(name.to_string(), true), pattern);
@@ -153,16 +167,20 @@ impl Pidgin {
         v
     }
     fn add_symbol(&mut self, s: Symbol, rx: &str) {
-        self.symbols.insert(s, rx.to_string());
+        if !self.symbols.contains_key(&s) {
+            self.symbols.insert(s.clone(), Vec::new());
+        }
+        self.symbols.get_mut(&s).unwrap().push(rx.to_string());
     }
-    pub fn compile(&self, phrases: &[&str]) -> String {
+    pub fn compile(&mut self) -> String {
         let mut exp = String::new();
-        let mut phrases = self.init(phrases);
+        let mut phrases = self.init();
         phrases.sort();
         phrases.dedup();
         for e in self.recursive_compile(phrases.as_mut()) {
             exp += &e.to_string();
         }
+        self.phrases.clear();
         exp
     }
     fn compress(&self, mut phrase: Vec<Expression>) -> Vec<Expression> {
@@ -192,7 +210,7 @@ impl Pidgin {
                         .collect::<Vec<String>>()
                         .join("");
                     let existing_length = s.len();
-                    let atomy = ATOMIC.is_match(&s);
+                    let atomy = is_atomic(&s);
                     let threshold_length = if atomy {
                         existing_length + 3
                     } else {
@@ -433,24 +451,16 @@ impl Pidgin {
         (prefix, suffix)
     }
     // initialize
-    fn digest(&self, s: &str) -> Vec<Expression> {
+    fn digest(&self, s: &str, symbols: &BTreeMap<Symbol, String>) -> Vec<Expression> {
         let mut rv = self.add_boundary_symbols(s);
         // apply the symbols to the strings
-        for (sym, val) in self.symbols.iter() {
-            let mut replacement = String::from("");
+        for (sym, replacement) in symbols.iter() {
             let mut nv = Vec::new();
             for e in rv {
                 if let Expression::Raw(s) = e {
                     match sym {
-                        Symbol::S(name, b) => {
+                        Symbol::S(name, _) => {
                             if s.contains(name) {
-                                if replacement.len() == 0 {
-                                    replacement = if *b {
-                                        format!("(?P<{}>{})", name, val)
-                                    } else {
-                                        format!("(?:{})", val)
-                                    };
-                                }
                                 for (i, s) in s.split(name).enumerate() {
                                     if i > 0 {
                                         nv.push(Expression::Part(replacement.clone(), false));
@@ -463,15 +473,8 @@ impl Pidgin {
                                 nv.push(Expression::Raw(s));
                             }
                         }
-                        Symbol::Rx(rx, o) => {
+                        Symbol::Rx(rx, _) => {
                             if rx.is_match(s.as_str()) {
-                                if replacement.len() == 0 {
-                                    replacement = if let Some(name) = o {
-                                        format!("(?P<{}>{})", name, val)
-                                    } else {
-                                        format!("(?:{})", val)
-                                    }
-                                }
                                 let mut offset = 0;
                                 for m in rx.find_iter(&s) {
                                     if m.start() > offset {
@@ -507,8 +510,45 @@ impl Pidgin {
         }
         nv
     }
-    fn init(&self, phrases: &[&str]) -> Vec<Vec<Expression>> {
-        phrases.iter().map(|s| self.digest(s)).collect()
+    fn init(&self) -> Vec<Vec<Expression>> {
+        let mut symbols: BTreeMap<Symbol, String> = BTreeMap::new();
+        for (sym, v) in self.symbols.iter() {
+            let e = if v.len() == 1 {
+                v[0].clone()
+            } else {
+                Expression::Alternation(
+                    v.iter()
+                        .map(|s| Expression::Part(s.clone(), false))
+                        .collect(),
+                    false,
+                ).to_string()
+            };
+            let e = match sym {
+                Symbol::S(name, b) => {
+                    if *b {
+                        format!("(?P<{}>{})", name, e)
+                    } else if is_atomic(&e) {
+                        e
+                    } else {
+                        format!("(?:{})", e)
+                    }
+                }
+                Symbol::Rx(rx, o) => {
+                    if let Some(name) = o {
+                        format!("(?P<{}>{})", name, e)
+                    } else if is_atomic(&e) {
+                        e
+                    } else {
+                        format!("(?:{})", e)
+                    }
+                }
+            };
+            symbols.insert(sym.clone(), e);
+        }
+        self.phrases
+            .iter()
+            .map(|s| self.digest(s, &symbols))
+            .collect()
     }
 }
 // sort simple stuff first
@@ -653,7 +693,7 @@ impl Expression {
             Expression::Raw(s) => s.clone(),
         };
         if self.is_optional() {
-            if ATOMIC.is_match(&s) {
+            if is_atomic(&s) {
                 s + "?"
             } else {
                 String::from("(:?") + &s + ")?"

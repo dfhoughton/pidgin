@@ -13,14 +13,18 @@ fn all_equal(words: &[&str], pattern: &str) {
 #[test]
 fn simple_alternation() {
     let words = vec!["cat", "dog", "camel"];
-    let pattern = Pidgin::new().compile(&words);
+    let mut p = Pidgin::new();
+    p.add(&words);
+    let pattern = p.compile();
     all_equal(&words, &pattern);
 }
 
 #[test]
 fn common_suffix() {
     let words = vec!["cats", "dogs"];
-    let pattern = Pidgin::new().compile(&words);
+    let mut p = Pidgin::new();
+    p.add(&words);
+    let pattern = p.compile();
     assert!(pattern.as_str().ends_with("s"));
     all_equal(&words, &pattern);
 }
@@ -28,7 +32,9 @@ fn common_suffix() {
 #[test]
 fn common_prefix() {
     let words = vec!["scat", "spore"];
-    let pattern = Pidgin::new().compile(&words);
+    let mut p = Pidgin::new();
+    p.add(&words);
+    let pattern = p.compile();
     assert!(pattern.as_str().starts_with("s"));
     all_equal(&words, &pattern);
 }
@@ -36,7 +42,9 @@ fn common_prefix() {
 #[test]
 fn both_prefix_and_suffix() {
     let words = vec!["scats", "spores"];
-    let pattern = Pidgin::new().compile(&words);
+    let mut p = Pidgin::new();
+    p.add(&words);
+    let pattern = p.compile();
     assert!(pattern.as_str().starts_with("s"));
     assert!(pattern.as_str().ends_with("s"));
     all_equal(&words, &pattern);
@@ -45,7 +53,9 @@ fn both_prefix_and_suffix() {
 #[test]
 fn short_character_class() {
     let words = vec!["a", "b"];
-    let pattern = Pidgin::new().compile(&words);
+    let mut p = Pidgin::new();
+    p.add(&words);
+    let pattern = p.compile();
     assert_eq!("[ab]", &pattern);
     all_equal(&words, &pattern);
 }
@@ -53,7 +63,9 @@ fn short_character_class() {
 #[test]
 fn long_character_class() {
     let words = vec!["a", "b", "c"];
-    let pattern = Pidgin::new().compile(&words);
+    let mut p = Pidgin::new();
+    p.add(&words);
+    let pattern = p.compile();
     assert_eq!("[a-c]", &pattern);
     all_equal(&words, &pattern);
 }
@@ -61,7 +73,9 @@ fn long_character_class() {
 #[test]
 fn complex_character_class() {
     let words = vec!["a", "b", "c", "g"];
-    let pattern = Pidgin::new().compile(&words);
+    let mut p = Pidgin::new();
+    p.add(&words);
+    let pattern = p.compile();
     assert_eq!("[a-cg]", &pattern);
     all_equal(&words, &pattern);
 }
@@ -69,7 +83,9 @@ fn complex_character_class() {
 #[test]
 fn character_class_in_alternation() {
     let words = vec!["Ant", "a", "b", "c", "g"];
-    let pattern = Pidgin::new().compile(&words);
+    let mut p = Pidgin::new();
+    p.add(&words);
+    let pattern = p.compile();
     assert_eq!("(?:[a-cg]|Ant)", &pattern);
     all_equal(&words, &pattern);
 }
@@ -77,7 +93,9 @@ fn character_class_in_alternation() {
 #[test]
 fn small_repeat_ignored() {
     let words = vec!["aaa"];
-    let pattern = Pidgin::new().compile(&words);
+    let mut p = Pidgin::new();
+    p.add(&words);
+    let pattern = p.compile();
     assert_eq!("aaa", &pattern);
     all_equal(&words, &pattern);
 }
@@ -85,7 +103,9 @@ fn small_repeat_ignored() {
 #[test]
 fn longer_repeat_found() {
     let words = vec!["aaaa"];
-    let pattern = Pidgin::new().compile(&words);
+    let mut p = Pidgin::new();
+    p.add(&words);
+    let pattern = p.compile();
     assert_eq!("a{4}", &pattern);
     all_equal(&words, &pattern);
 }
@@ -93,7 +113,9 @@ fn longer_repeat_found() {
 #[test]
 fn complex_repeat() {
     let words = vec!["aaaabbbbaaaabbbb"];
-    let pattern = Pidgin::new().compile(&words);
+    let mut p = Pidgin::new();
+    p.add(&words);
+    let pattern = p.compile();
     assert_eq!("(?:a{4}b{4}){2}", &pattern);
     all_equal(&words, &pattern);
 }
@@ -103,7 +125,8 @@ fn simple_string_symbol_capturing() {
     let words = vec!["foo"];
     let mut p = Pidgin::new();
     p.rule("foo", "bar");
-    let pattern = p.compile(&words);
+    p.add(&words);
+    let pattern = p.compile();
     assert_eq!("(?P<foo>bar)", pattern);
 }
 
@@ -111,8 +134,9 @@ fn simple_string_symbol_capturing() {
 fn simple_string_symbol_non_capturing() {
     let words = vec!["foo"];
     let mut p = Pidgin::new();
+    p.add(&words);
     p.nm_rule("foo", "bar");
-    let pattern = p.compile(&words);
+    let pattern = p.compile();
     assert_eq!("(?:bar)", pattern);
 }
 
@@ -121,7 +145,8 @@ fn simple_rx_symbol_capturing() {
     let words = vec!["foo bar"];
     let mut p = Pidgin::new();
     p.rx_rule(r"\s+", r"\s+", Some("ws"));
-    let pattern = p.compile(&words);
+    p.add(&words);
+    let pattern = p.compile();
     assert_eq!("foo(?P<ws>\\s+)bar", pattern);
 }
 
@@ -130,7 +155,8 @@ fn simple_rx_symbol_non_capturing() {
     let words = vec!["foo bar"];
     let mut p = Pidgin::new();
     p.rx_rule(r"\s+", r"\s+", None);
-    let pattern = p.compile(&words);
+    p.add(&words);
+    let pattern = p.compile();
     assert_eq!("foo(?:\\s+)bar", pattern);
 }
 
@@ -140,7 +166,8 @@ fn string_string_symbol_ordering() {
     let mut p = Pidgin::new();
     p.nm_rule("foo", "bar");
     p.nm_rule("f", "plugh");
-    let pattern = p.compile(&words);
+    p.add(&words);
+    let pattern = p.compile();
     assert_eq!("(?:bar) (?:plugh)", pattern);
 }
 
@@ -150,7 +177,8 @@ fn capturing_versus_non_capturing_symbol_ordering() {
     let mut p = Pidgin::new();
     p.rule("foo", "plugh");
     p.nm_rule("foo", "bar");
-    let pattern = p.compile(&words);
+    p.add(&words);
+    let pattern = p.compile();
     assert_eq!("(?P<foo>plugh)", pattern);
 }
 
@@ -160,7 +188,8 @@ fn string_regex_symbol_ordering() {
     let mut p = Pidgin::new();
     p.rx_rule("foo", "bar", None);
     p.nm_rule("f", "plugh");
-    let pattern = p.compile(&words);
+    p.add(&words);
+    let pattern = p.compile();
     assert_eq!("(?:plugh)oo (?:plugh)", pattern);
 }
 
@@ -170,15 +199,17 @@ fn regex_regex_symbol_ordering() {
     let mut p = Pidgin::new();
     p.rx_rule("foo", "bar", None);
     p.rx_rule("f", "plugh", None);
-    let pattern = p.compile(&words);
+    p.add(&words);
+    let pattern = p.compile();
     assert_eq!("(?:bar) (?:plugh)", pattern);
 }
 
 #[test]
 fn normalize_whitespace() {
     let words = vec!["foo bar", "baz   plugh"];
-    let p = Pidgin::new().normalize_whitespace();
-    let pattern = p.compile(&words);
+    let mut p = Pidgin::new().normalize_whitespace();
+    p.add(&words);
+    let pattern = p.compile();
     let rx = Regex::new(&pattern).unwrap();
     assert!(rx.is_match("foo    bar"));
     assert!(rx.is_match("baz plugh"));
@@ -187,8 +218,9 @@ fn normalize_whitespace() {
 #[test]
 fn word_boundaries() {
     let words = vec!["tardigrade", "onomatopoeia"];
-    let p = Pidgin::new().word_bound();
-    let pattern = p.compile(&words);
+    let mut p = Pidgin::new().word_bound();
+    p.add(&words);
+    let pattern = p.compile();
     let rx = Regex::new(&pattern).unwrap();
     for w in words {
         assert!(rx.is_match(w));
@@ -206,8 +238,9 @@ fn word_boundaries() {
 #[test]
 fn line_boundaries() {
     let words = vec!["tardigrade", "onomatopoeia"];
-    let p = Pidgin::new().line_bound();
-    let pattern = p.compile(&words);
+    let mut p = Pidgin::new().line_bound();
+    p.add(&words);
+    let pattern = p.compile();
     let rx = Regex::new(&pattern).unwrap();
     for w in words {
         assert!(rx.is_match(w), format!("{} matches '{}", pattern, w));
@@ -239,8 +272,9 @@ fn line_boundaries() {
 #[test]
 fn string_boundaries() {
     let words = vec!["tardigrade", "onomatopoeia"];
-    let p = Pidgin::new().string_bound();
-    let pattern = p.compile(&words);
+    let mut p = Pidgin::new().string_bound();
+    p.add(&words);
+    let pattern = p.compile();
     let rx = Regex::new(&pattern).unwrap();
     for w in words {
         assert!(rx.is_match(w), format!("{} matches '{}", pattern, w));
@@ -267,4 +301,34 @@ fn string_boundaries() {
             format!("{} doesn't match '{}' with newline after", pattern, w)
         );
     }
+}
+
+#[test]
+fn rule_ordering() {
+    let mut p = Pidgin::new();
+    p.rule("foo", "(?P<alpha>[a-zA-Z]+)");
+    p.rule("foo", r"(?P<numeric>\d+)");
+    p.rule("foo", r"(?P<alphanumeric>[\da-zA-Z]+)");
+    p.add(&["foo"]);
+    let pattern = p.compile();
+    let rx = Regex::new(&pattern).unwrap();
+    let cap = rx.captures("1234").unwrap();
+    assert!(cap.name("foo").is_some(), "pattern matched");
+    assert!(cap.name("numeric").is_some(), "right order");
+    let cap = rx.captures("abc").unwrap();
+    assert!(cap.name("foo").is_some(), "pattern matched");
+    assert!(cap.name("alpha").is_some(), "right order");
+    p.clear();
+    p.rule("foo", r"(?P<alphanumeric>[\da-zA-Z]+)");
+    p.rule("foo", "(?P<alpha>[a-zA-Z]+)");
+    p.rule("foo", r"(?P<numeric>\d+)");
+    p.add(&["foo"]);
+    let pattern = p.compile();
+    let rx = Regex::new(&pattern).unwrap();
+    let cap = rx.captures("1234").unwrap();
+    assert!(cap.name("foo").is_some(), "pattern matched");
+    assert!(cap.name("numeric").is_none(), "right order");
+    let cap = rx.captures("abc").unwrap();
+    assert!(cap.name("foo").is_some(), "pattern matched");
+    assert!(cap.name("alpha").is_none(), "right order");
 }
