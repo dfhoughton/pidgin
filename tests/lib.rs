@@ -1,10 +1,10 @@
 extern crate pidgin;
-use pidgin::Pidgin;
+use pidgin::{Grammar, Pidgin};
 extern crate regex;
 use regex::Regex;
 
-fn all_equal(words: &[&str], pattern: &str) {
-    let rx = Regex::new(pattern).unwrap();
+fn all_equal(words: &[&str], pattern: &Grammar) {
+    let rx = pattern.matcher().unwrap();
     for w in words {
         assert!(rx.is_match(w))
     }
@@ -25,7 +25,7 @@ fn common_suffix() {
     let mut p = Pidgin::new();
     p.add(&words);
     let pattern = p.compile();
-    assert!(pattern.as_str().ends_with("s"));
+    assert!(pattern.to_string().as_str().ends_with("s"));
     all_equal(&words, &pattern);
 }
 
@@ -331,4 +331,13 @@ fn rule_ordering() {
     let cap = rx.captures("abc").unwrap();
     assert!(cap.name("foo").is_some(), "pattern matched");
     assert!(cap.name("alpha").is_none(), "right order");
+}
+
+#[test]
+fn case_sensitivity() {
+    let words = vec!["cat", "dog"];
+    let mut p = Pidgin::new().case_insensitive(true);
+    p.add(&words);
+    let pattern = p.compile();
+    all_equal(&vec!["CAT", "DOG"], &pattern);
 }
