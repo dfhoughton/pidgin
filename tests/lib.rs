@@ -35,7 +35,7 @@ fn common_prefix() {
     let mut p = Pidgin::new();
     p.add(&words);
     let pattern = p.compile();
-    assert!(pattern.as_str().starts_with("s"));
+    assert!(pattern.to_string().as_str().starts_with("s"));
     all_equal(&words, &pattern);
 }
 
@@ -45,8 +45,9 @@ fn both_prefix_and_suffix() {
     let mut p = Pidgin::new();
     p.add(&words);
     let pattern = p.compile();
-    assert!(pattern.as_str().starts_with("s"));
-    assert!(pattern.as_str().ends_with("s"));
+    let rx = pattern.to_string();
+    assert!(rx.as_str().starts_with("s"));
+    assert!(rx.as_str().ends_with("s"));
     all_equal(&words, &pattern);
 }
 
@@ -56,7 +57,7 @@ fn short_character_class() {
     let mut p = Pidgin::new();
     p.add(&words);
     let pattern = p.compile();
-    assert_eq!("[ab]", &pattern);
+    assert_eq!("[ab]", &pattern.to_string());
     all_equal(&words, &pattern);
 }
 
@@ -66,7 +67,7 @@ fn long_character_class() {
     let mut p = Pidgin::new();
     p.add(&words);
     let pattern = p.compile();
-    assert_eq!("[a-c]", &pattern);
+    assert_eq!("[a-c]", &pattern.to_string());
     all_equal(&words, &pattern);
 }
 
@@ -76,7 +77,7 @@ fn complex_character_class() {
     let mut p = Pidgin::new();
     p.add(&words);
     let pattern = p.compile();
-    assert_eq!("[a-cg]", &pattern);
+    assert_eq!("[a-cg]", &pattern.to_string());
     all_equal(&words, &pattern);
 }
 
@@ -86,7 +87,7 @@ fn character_class_in_alternation() {
     let mut p = Pidgin::new();
     p.add(&words);
     let pattern = p.compile();
-    assert_eq!("(?:[a-cg]|Ant)", &pattern);
+    assert_eq!("(?:[a-cg]|Ant)", &pattern.to_string());
     all_equal(&words, &pattern);
 }
 
@@ -96,7 +97,7 @@ fn small_repeat_ignored() {
     let mut p = Pidgin::new();
     p.add(&words);
     let pattern = p.compile();
-    assert_eq!("aaa", &pattern);
+    assert_eq!("aaa", &pattern.to_string());
     all_equal(&words, &pattern);
 }
 
@@ -106,7 +107,7 @@ fn longer_repeat_found() {
     let mut p = Pidgin::new();
     p.add(&words);
     let pattern = p.compile();
-    assert_eq!("a{4}", &pattern);
+    assert_eq!("a{4}", &pattern.to_string());
     all_equal(&words, &pattern);
 }
 
@@ -116,7 +117,7 @@ fn complex_repeat() {
     let mut p = Pidgin::new();
     p.add(&words);
     let pattern = p.compile();
-    assert_eq!("(?:a{4}b{4}){2}", &pattern);
+    assert_eq!("(?:a{4}b{4}){2}", &pattern.to_string());
     all_equal(&words, &pattern);
 }
 

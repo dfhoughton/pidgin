@@ -31,12 +31,69 @@ fn is_atomic(s: &str) -> bool {
 }
 
 #[derive(Clone, Debug)]
-pub struct Pidgin {
+pub struct Flags {
     case_insensitive: bool,
     dot_all: bool,
     multi_line: bool,
     unicode: bool,
     enclosed: bool,
+}
+
+impl Flags {
+    fn defaults() -> Flags {
+        Flags {
+            case_insensitive: false,
+            dot_all: false,
+            multi_line: false,
+            unicode: true,
+            enclosed: false,
+        }
+    }
+}
+
+impl PartialOrd for Flags {
+    fn partial_cmp(&self, other: &Flags) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Flags {
+    fn cmp(&self, other: &Flags) -> Ordering {
+        let o = self.case_insensitive.cmp(&other.case_insensitive);
+        if o != Ordering::Equal {
+            return o;
+        }
+        let o = self.dot_all.cmp(&other.dot_all);
+        if o != Ordering::Equal {
+            return o;
+        }
+        let o = self.multi_line.cmp(&other.multi_line);
+        if o != Ordering::Equal {
+            return o;
+        }
+        let o = self.unicode.cmp(&other.unicode);
+        if o != Ordering::Equal {
+            return o;
+        }
+        let o = self.enclosed.cmp(&other.enclosed);
+        if o != Ordering::Equal {
+            return o;
+        }
+        Ordering::Equal
+    }
+}
+
+impl PartialEq for Flags {
+    fn eq(&self, other: &Flags) -> bool {
+        self.cmp(other) == Ordering::Equal
+    }
+}
+
+impl Eq for Flags {}
+
+#[derive(Clone, Debug)]
+pub struct Pidgin {
+    flags: Flags,
     left: Option<Boundary>,
     right: Option<Boundary>,
     symbols: BTreeMap<Symbol, Vec<Expression>>,
@@ -46,16 +103,17 @@ pub struct Pidgin {
 impl Pidgin {
     pub fn new() -> Pidgin {
         Pidgin {
-            case_insensitive: false,
-            dot_all: false,
-            multi_line: false,
-            unicode: true,
-            enclosed: false,
+            flags: Flags::defaults(),
             left: None,
             right: None,
             symbols: BTreeMap::new(),
             phrases: Vec::new(),
         }
+    }
+    pub fn rx(words: &[&str]) -> String {
+        let mut p = Pidgin::new();
+        p.add(words);
+        p.compile().to_string(&Flags::defaults())
     }
     pub fn add(&mut self, phrases: &[&str]) {
         for w in phrases {
@@ -78,17 +136,15 @@ impl Pidgin {
         match Regex::new(pattern) {
             Err(e) => Err(e),
             Ok(_) => {
+                let mut flags = Flags::defaults();
+                flags.enclosed = !is_atomic(pattern);
                 self.add_symbol(
                     Symbol::S(name.to_string()),
                     Expression::Grammar(
                         Grammar {
+                            flags,
                             name: Some(name.to_string()),
                             sequence: vec![Expression::Part(pattern.to_string(), false)],
-                            case_insensitive: false,
-                            dot_all: false,
-                            multi_line: false,
-                            unicode: true,
-                            enclosed: !is_atomic(pattern),
                         },
                         false,
                     ),
@@ -100,7 +156,7 @@ impl Pidgin {
     pub fn nm_rule(&mut self, name: &str, g: &Grammar) {
         let mut g = g.clone();
         g.name = None;
-        g.enclosed = true;
+        g.flags.enclosed = true;
         self.add_symbol(Symbol::S(name.to_string()), Expression::Grammar(g, false));
     }
     pub fn rx_rule(
@@ -116,14 +172,12 @@ impl Pidgin {
                     None => None,
                 };
                 let sequence = vec![Expression::Part(pattern.to_string(), false)];
+                let mut flags = Flags::defaults();
+                flags.enclosed = !is_atomic(pattern);
                 let g = Grammar {
                     name,
                     sequence,
-                    case_insensitive: false,
-                    dot_all: false,
-                    multi_line: false,
-                    unicode: true,
-                    enclosed: !is_atomic(pattern),
+                    flags,
                 };
                 self.add_symbol(Symbol::Rx(rx), Expression::Grammar(g, false));
                 Ok(self)
@@ -132,23 +186,23 @@ impl Pidgin {
         }
     }
     pub fn case_insensitive(mut self, case: bool) -> Pidgin {
-        self.case_insensitive = case;
+        self.flags.case_insensitive = case;
         self
     }
     pub fn multi_line(mut self, case: bool) -> Pidgin {
-        self.multi_line = case;
+        self.flags.multi_line = case;
         self
     }
     pub fn dot_all(mut self, case: bool) -> Pidgin {
-        self.dot_all = case;
+        self.flags.dot_all = case;
         self
     }
     pub fn unicode(mut self, case: bool) -> Pidgin {
-        self.unicode = case;
+        self.flags.unicode = case;
         self
     }
     pub fn enclosed(mut self, case: bool) -> Pidgin {
-        self.enclosed = case;
+        self.flags.enclosed = case;
         self
     }
     pub fn normalize_whitespace(mut self) -> Pidgin {
@@ -176,17 +230,17 @@ impl Pidgin {
     pub fn line_bound(mut self) -> Pidgin {
         self.left = Some(Boundary::Line);
         self.right = Some(Boundary::Line);
-        self.multi_line = true;
+        self.flags.multi_line = true;
         self
     }
     pub fn left_line_bound(mut self) -> Pidgin {
         self.left = Some(Boundary::Line);
-        self.multi_line = true;
+        self.flags.multi_line = true;
         self
     }
     pub fn right_line_bound(mut self) -> Pidgin {
         self.right = Some(Boundary::Line);
-        self.multi_line = true;
+        self.flags.multi_line = true;
         self
     }
     pub fn string_bound(mut self) -> Pidgin {
@@ -212,8 +266,8 @@ impl Pidgin {
                 Boundary::Word => {
                     if phrase.len() > 0 {
                         let c = phrase[0..1].to_string();
-                        let is_boundary = self.unicode && UNICODE_B.is_match(&c)
-                            || !self.unicode && ASCII_B.is_match(&c);
+                        let is_boundary = self.flags.unicode && UNICODE_B.is_match(&c)
+                            || !self.flags.unicode && ASCII_B.is_match(&c);
                         if is_boundary {
                             Some(Expression::Part(String::from(r"\b"), false))
                         } else {
@@ -234,8 +288,8 @@ impl Pidgin {
                 Boundary::Word => {
                     if phrase.len() > 0 {
                         let c = phrase.chars().last().unwrap().to_string();
-                        let is_boundary = self.unicode && UNICODE_B.is_match(&c)
-                            || !self.unicode && ASCII_B.is_match(&c);
+                        let is_boundary = self.flags.unicode && UNICODE_B.is_match(&c)
+                            || !self.flags.unicode && ASCII_B.is_match(&c);
                         if is_boundary {
                             Some(Expression::Part(String::from(r"\b"), false))
                         } else {
@@ -271,16 +325,12 @@ impl Pidgin {
         let mut phrases = self.init();
         phrases.sort();
         phrases.dedup();
-        let sequence = recursive_compile(phrases.as_mut());
+        let sequence = self.recursive_compile(phrases.as_mut());
         self.phrases.clear();
         Grammar {
             sequence,
             name: None,
-            case_insensitive: self.case_insensitive,
-            dot_all: self.dot_all,
-            multi_line: self.multi_line,
-            unicode: self.unicode,
-            enclosed: self.enclosed,
+            flags: self.flags.clone(),
         }
     }
     // initialize
@@ -372,6 +422,112 @@ impl Pidgin {
             .map(|s| self.digest(s, &symbols))
             .collect()
     }
+    fn compress(&self, mut phrase: Vec<Expression>) -> Vec<Expression> {
+        if phrase.len() < 2 {
+            return phrase;
+        }
+        let mut rep_length = 1;
+        while rep_length <= phrase.len() / 2 {
+            let mut v = Vec::with_capacity(phrase.len());
+            let mut i = 0;
+            while i < phrase.len() {
+                let mut match_length = 1;
+                let mut j = i + rep_length;
+                'outer: while j <= phrase.len() - rep_length {
+                    for k in 0..rep_length {
+                        if phrase[i + k] != phrase[j + k] {
+                            break 'outer;
+                        }
+                    }
+                    match_length += 1;
+                    j += rep_length;
+                }
+                if match_length > 1 {
+                    let s = phrase[i..i + rep_length]
+                        .iter()
+                        .map(|e| e.to_string(&self.flags))
+                        .collect::<Vec<String>>()
+                        .join("");
+                    let existing_length = s.len();
+                    let atomy = is_atomic(&s);
+                    let threshold_length = if atomy {
+                        existing_length + 3
+                    } else {
+                        existing_length + 7
+                    };
+                    if threshold_length <= existing_length * match_length {
+                        if rep_length == 1 {
+                            v.push(Expression::Repetition(
+                                Box::new(phrase[i].clone()),
+                                match_length,
+                                false,
+                            ));
+                        } else {
+                            let sequence = phrase[i..i + rep_length]
+                                .iter()
+                                .map(Expression::clone)
+                                .collect::<Vec<_>>();
+                            let sequence = Expression::Sequence(sequence, false);
+                            v.push(Expression::Repetition(
+                                Box::new(sequence),
+                                match_length,
+                                false,
+                            ));
+                        }
+                    } else {
+                        for j in 0..(match_length * rep_length) {
+                            v.push(phrase[i + j].clone());
+                        }
+                    }
+                    i += match_length * rep_length;
+                } else {
+                    v.push(phrase[i].clone());
+                    i += 1;
+                }
+            }
+            phrase = v;
+            rep_length += 1;
+        }
+        phrase
+    }
+    fn recursive_compile(&self, phrases: &mut Vec<Vec<Expression>>) -> Vec<Expression> {
+        if phrases.len() == 0 {
+            return Vec::new();
+        }
+        if phrases.len() == 1 {
+            return self.compress(phrases[0].clone());
+        }
+        let (prefix, suffix) = common_adfixes(phrases);
+        let mut prefix = self.compress(prefix);
+        let mut suffix = self.compress(suffix);
+        phrases.sort();
+        let mut map: BTreeMap<&Expression, Vec<&Vec<Expression>>> = BTreeMap::new();
+        let mut optional = false;
+        for phrase in phrases {
+            if phrase.len() == 0 {
+                optional = true;
+            } else {
+                map.entry(&phrase[0])
+                    .or_insert_with(|| Vec::new())
+                    .push(phrase);
+            }
+        }
+        let mut rv = Vec::new();
+        for (_, ref mut v) in map.iter_mut() {
+            let mut v = v.iter().map(|v| (*v).clone()).collect();
+            rv.push(self.recursive_compile(&mut v));
+        }
+        rv.sort_by(vec_sort);
+        rv = find_character_classes(rv);
+        // should pull out character classes at this point
+        let alternates: Vec<Expression> = rv
+            .iter()
+            .map(|v| Expression::Sequence(v.clone(), false))
+            .collect();
+        prefix.push(Expression::Alternation(alternates, optional));
+        prefix.append(&mut suffix);
+        prefix
+    }
 }
 // sort simple stuff first
 // this makes it easier to find character ranges, and has the side effect of
@@ -390,112 +546,6 @@ fn vec_sort(a: &Vec<Expression>, b: &Vec<Expression>) -> Ordering {
     Ordering::Equal
 }
 
-fn recursive_compile(phrases: &mut Vec<Vec<Expression>>) -> Vec<Expression> {
-    if phrases.len() == 0 {
-        return Vec::new();
-    }
-    if phrases.len() == 1 {
-        return compress(phrases[0].clone());
-    }
-    let (prefix, suffix) = common_adfixes(phrases);
-    let mut prefix = compress(prefix);
-    let mut suffix = compress(suffix);
-    phrases.sort();
-    let mut map: BTreeMap<&Expression, Vec<&Vec<Expression>>> = BTreeMap::new();
-    let mut optional = false;
-    for phrase in phrases {
-        if phrase.len() == 0 {
-            optional = true;
-        } else {
-            map.entry(&phrase[0])
-                .or_insert_with(|| Vec::new())
-                .push(phrase);
-        }
-    }
-    let mut rv = Vec::new();
-    for (_, ref mut v) in map.iter_mut() {
-        let mut v = v.iter().map(|v| (*v).clone()).collect();
-        rv.push(recursive_compile(&mut v));
-    }
-    rv.sort_by(vec_sort);
-    rv = find_character_classes(rv);
-    // should pull out character classes at this point
-    let alternates: Vec<Expression> = rv
-        .iter()
-        .map(|v| Expression::Sequence(v.clone(), false))
-        .collect();
-    prefix.push(Expression::Alternation(alternates, optional));
-    prefix.append(&mut suffix);
-    prefix
-}
-fn compress(mut phrase: Vec<Expression>) -> Vec<Expression> {
-    if phrase.len() < 2 {
-        return phrase;
-    }
-    let mut rep_length = 1;
-    while rep_length <= phrase.len() / 2 {
-        let mut v = Vec::with_capacity(phrase.len());
-        let mut i = 0;
-        while i < phrase.len() {
-            let mut match_length = 1;
-            let mut j = i + rep_length;
-            'outer: while j <= phrase.len() - rep_length {
-                for k in 0..rep_length {
-                    if phrase[i + k] != phrase[j + k] {
-                        break 'outer;
-                    }
-                }
-                match_length += 1;
-                j += rep_length;
-            }
-            if match_length > 1 {
-                let s = phrase[i..i + rep_length]
-                    .iter()
-                    .map(Expression::to_string)
-                    .collect::<Vec<String>>()
-                    .join("");
-                let existing_length = s.len();
-                let atomy = is_atomic(&s);
-                let threshold_length = if atomy {
-                    existing_length + 3
-                } else {
-                    existing_length + 7
-                };
-                if threshold_length <= existing_length * match_length {
-                    if rep_length == 1 {
-                        v.push(Expression::Repetition(
-                            Box::new(phrase[i].clone()),
-                            match_length,
-                            false,
-                        ));
-                    } else {
-                        let sequence = phrase[i..i + rep_length]
-                            .iter()
-                            .map(Expression::clone)
-                            .collect::<Vec<_>>();
-                        let sequence = Expression::Sequence(sequence, false);
-                        v.push(Expression::Repetition(
-                            Box::new(sequence),
-                            match_length,
-                            false,
-                        ));
-                    }
-                } else {
-                    for j in 0..(match_length * rep_length) {
-                        v.push(phrase[i + j].clone());
-                    }
-                }
-                i += match_length * rep_length;
-            } else {
-                v.push(phrase[i].clone());
-                i += 1;
-            }
-        }
-        phrase = v;
-        rep_length += 1;
-    }
-    phrase
-}
 fn common_adfixes(phrases: &mut Vec<Vec<Expression>>) -> (Vec<Expression>, Vec<Expression>) {
     let mut len = 0;
     let mut inverted = false;
@@ -665,43 +715,53 @@ fn character_class_escape(c: char) -> String {
 pub struct Grammar {
     name: Option<String>,
     sequence: Vec<Expression>,
-    case_insensitive: bool,
-    dot_all: bool,
-    multi_line: bool,
-    unicode: bool,
-    enclosed: bool,
+    flags: Flags,
 }
 
 impl Grammar {
-    fn needs_closure(&self) -> bool {
-        self.enclosed || self.needs_flags_set()
+    fn needs_closure(&self, context: &Flags) -> bool {
+        self.flags.enclosed || self.needs_flags_set(context)
     }
-    fn needs_flags_set(&self) -> bool {
-        self.case_insensitive || self.dot_all || self.multi_line || !self.unicode
+    fn needs_flags_set(&self, context: &Flags) -> bool {
+        self.flags.case_insensitive ^ context.case_insensitive
+            || self.flags.dot_all ^ context.dot_all
+            || self.flags.multi_line ^ context.multi_line
+            || self.flags.unicode ^ context.unicode
     }
     // flag string when needed
-    fn flags(&self) -> String {
+    fn flags(&self, context: &Flags) -> String {
+        if !self.needs_flags_set(context) {
+            return String::from("");
+        }
         let mut flags_on = Vec::with_capacity(4);
         let mut flags_off = Vec::with_capacity(4);
-        if self.case_insensitive {
-            flags_on.push("i");
-        } else if self.enclosed {
-            flags_off.push("i");
+        if self.flags.case_insensitive ^ context.case_insensitive {
+            if self.flags.case_insensitive {
+                flags_on.push("i");
+            } else if self.flags.enclosed {
+                flags_off.push("i");
+            }
         }
-        if self.multi_line {
-            flags_on.push("m");
-        } else if self.enclosed {
-            flags_off.push("m");
+        if self.flags.multi_line ^ context.multi_line {
+            if self.flags.multi_line {
+                flags_on.push("m");
+            } else if self.flags.enclosed {
+                flags_off.push("m");
+            }
         }
-        if self.dot_all {
-            flags_on.push("s");
-        } else if self.enclosed {
-            flags_off.push("s");
+        if self.flags.dot_all ^ context.dot_all {
+            if self.flags.dot_all {
+                flags_on.push("s");
+            } else if self.flags.enclosed {
+                flags_off.push("s");
+            }
         }
-        if !self.unicode {
-            flags_off.push("u");
-        } else if self.enclosed {
-            flags_on.push("u");
+        if self.flags.unicode ^ context.unicode {
+            if !self.flags.unicode {
+                flags_off.push("u");
+            } else if self.flags.enclosed {
+                flags_on.push("u");
+            }
         }
         let mut flags = String::new();
         if flags_on.len() > 0 {
@@ -717,19 +777,19 @@ impl Grammar {
         Matcher::new(&self)
     }
     // mostly for debugging -- this is likely not to compile due to repeated names
-    pub fn to_string(&self) -> String {
+    pub fn to_string(&self, context: &Flags) -> String {
         let mut s = if self.name.is_some() {
             format!("(?P<{}>", self.name.as_ref().unwrap())
         } else {
             String::new()
         };
-        if self.needs_closure() {
-            s = s + format!("(?{}:", self.flags()).as_str();
+        if self.needs_closure(context) {
+            s = s + format!("(?{}:", self.flags(context)).as_str();
         }
         for e in &self.sequence {
-            s += e.to_string().as_ref();
+            s += e.to_string(&self.flags).as_ref();
         }
-        if self.needs_closure() {
+        if self.needs_closure(context) {
             s = s + ")"
         }
         if self.name.is_some() {
@@ -768,6 +828,7 @@ impl Matcher {
     pub fn is_match(&self, text: &str) -> bool {
         self.rx.is_match(text)
     }
+    // recursively build a parse tree showing the groups matched
     fn build_tree<'t>(&self, m: &mut Match<'t>, parent: &str, text: &'t str, captures: &Captures) {
         if let Some(children) = self.parentage.get(parent) {
             for c in children {
@@ -780,6 +841,7 @@ impl Matcher {
                         end: n.end(),
                         children: None,
                     };
+                    self.build_tree(&mut child, &c, text, captures);
                     m.children.get_or_insert_with(|| Vec::new()).push(child);
                 }
             }
@@ -803,7 +865,7 @@ impl Matcher {
             true,
         );
         if let Expression::Grammar(g, _) = g {
-            match Regex::new(&g.to_string()) {
+            match Regex::new(&g.to_string(&Flags::defaults())) {
                 Ok(rx) => Ok(Matcher {
                     translation,
                     parentage,
@@ -852,11 +914,15 @@ impl Matcher {
                     } else {
                         inserting = false;
                     }
-                    for ref mut e in &mut g.sequence {
-                        Matcher::walk(idx, &new_name, e, translation, parentage, inserting);
+                    g.name = if inserting {
+                        Some(new_name.clone())
+                    } else {
+                        None
                     }
                 }
-                g.name = Some(new_name)
+                for ref mut e in &mut g.sequence {
+                    Matcher::walk(idx, &new_name, e, translation, parentage, inserting);
+                }
             }
             _ => (),
         }
@@ -873,7 +939,7 @@ pub struct Match<'t> {
 }
 
 impl<'t> Match<'t> {
-    pub fn name(&self) -> &str {
+    pub fn rule(&self) -> &str {
         &self.name
     }
     pub fn children(&self) -> Option<&[Match<'t>]> {
@@ -890,6 +956,21 @@ impl<'t> Match<'t> {
     }
     pub fn value(&self) -> &'t str {
         &self.text[self.start..self.end]
+    }
+    // recursive search for the value of any named pattern by this name that matched
+    pub fn name(&self, name: &str) -> Option<&'t str> {
+        if self.name == name {
+            Some(self.value())
+        } else {
+            if self.children.is_some() {
+                for m in self.children.as_ref().unwrap() {
+                    if let Some(n) = m.name(name) {
+                        return Some(n)
+                    }
+                }
+            }
+            None
+        }
     }
 }
 
@@ -930,27 +1011,7 @@ impl Ord for Grammar {
                 return o;
             }
         }
-        let o = self.case_insensitive.cmp(&other.case_insensitive);
-        if o != Ordering::Equal {
-            return o;
-        }
-        let o = self.dot_all.cmp(&other.dot_all);
-        if o != Ordering::Equal {
-            return o;
-        }
-        let o = self.multi_line.cmp(&other.multi_line);
-        if o != Ordering::Equal {
-            return o;
-        }
-        let o = self.unicode.cmp(&other.unicode);
-        if o != Ordering::Equal {
-            return o;
-        }
-        let o = self.enclosed.cmp(&other.enclosed);
-        if o != Ordering::Equal {
-            return o;
-        }
-        Ordering::Equal
+        self.flags.cmp(&other.flags)
     }
 }
 
@@ -1038,27 +1099,27 @@ impl Expression {
             Expression::Raw(_) => false,
         }
     }
-    fn to_string(&self) -> String {
+    fn to_string(&self, context: &Flags) -> String {
         // String::new()
         let s = match self {
             Expression::Char(c, _) => escape(&c.to_string()),
             Expression::Alternation(v, _) => {
                 if v.len() == 1 {
-                    v[0].to_string()
+                    v[0].to_string(context)
                 } else {
                     let mut s = String::from("(?:");
                     for (i, e) in v.iter().enumerate() {
                         if i > 0 {
                             s.push('|');
                         }
-                        s += &e.to_string();
+                        s += &e.to_string(context);
                     }
                     s.push(')');
                     s
                 }
             }
             Expression::Repetition(e, n, _) => {
-                let mut s = e.to_string();
+                let mut s = e.to_string(context);
                 let reps = format!("{{{}}}", n);
                 if is_atomic(&s) {
                     s + reps.as_str()
@@ -1068,10 +1129,10 @@ impl Expression {
             }
             Expression::Sequence(v, _) => v
                 .iter()
-                .map(Expression::to_string)
+                .map(|e| e.to_string(context))
                 .collect::<Vec<_>>()
                 .join(""),
-            Expression::Grammar(g, _) => g.to_string(),
+            Expression::Grammar(g, _) => g.to_string(context),
             Expression::Part(s, _) => s.clone(),
             Expression::Raw(s) => s.clone(),
         };
@@ -1100,15 +1161,7 @@ impl Ord for Expression {
                 &Expression::Char(c2, b2) => match c1.cmp(&c2) {
                     Ordering::Less => Ordering::Less,
                     Ordering::Greater => Ordering::Greater,
-                    Ordering::Equal => {
-                        if b1 == b2 {
-                            Ordering::Equal
-                        } else if b1 {
-                            Ordering::Greater
-                        } else {
-                            Ordering::Less
-                        }
-                    }
+                    Ordering::Equal => b1.cmp(&b2),
                 },
                 Expression::Repetition(_, _, _) => Ordering::Less,
                 Expression::Sequence(_, _) => Ordering::Less,
@@ -1175,14 +1228,11 @@ impl Ord for Expression {
                             }
                         }
                     }
-                    if v2.len() > v1.len() {
-                        Ordering::Less
-                    } else if b1 == b2 {
-                        Ordering::Equal
-                    } else if *b1 {
-                        Ordering::Greater
+                    let o = v1.len().cmp(&v2.len());
+                    if o != Ordering::Equal {
+                        o
                     } else {
-                        Ordering::Less
+                        b1.cmp(&b2)
                     }
                 }
                 Expression::Part(_, _) => Ordering::Less,
@@ -1197,15 +1247,7 @@ impl Ord for Expression {
                 Expression::Part(s2, b2) => match s1.cmp(s2) {
                     Ordering::Less => Ordering::Less,
                     Ordering::Greater => Ordering::Greater,
-                    Ordering::Equal => {
-                        if b1 == b2 {
-                            Ordering::Equal
-                        } else if *b1 {
-                            Ordering::Greater
-                        } else {
-                            Ordering::Less
-                        }
-                    }
+                    Ordering::Equal => b1.cmp(&b2),
                 },
                 Expression::Grammar(_, _) => Ordering::Less,
                 Expression::Raw(_) => Ordering::Less,
@@ -1219,15 +1261,7 @@ impl Ord for Expression {
                 Expression::Grammar(g2, b2) => match g1.cmp(g2) {
                     Ordering::Less => Ordering::Less,
                     Ordering::Greater => Ordering::Greater,
-                    Ordering::Equal => {
-                        if b1 == b2 {
-                            Ordering::Equal
-                        } else if *b1 {
-                            Ordering::Greater
-                        } else {
-                            Ordering::Less
-                        }
-                    }
+                    Ordering::Equal => b1.cmp(&b2),
                 },
                 Expression::Raw(_) => Ordering::Less,
             },
