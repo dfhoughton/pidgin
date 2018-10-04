@@ -125,84 +125,63 @@ fn complex_repeat() {
 fn simple_string_symbol_capturing() {
     let words = vec!["foo"];
     let mut p = Pidgin::new();
-    p.rule("foo", "bar");
+    p.rule("foo", &Pidgin::grammar(&["bar"]));
     p.add(&words);
     let pattern = p.compile();
-    assert_eq!("(?P<foo>bar)", pattern);
-}
-
-#[test]
-fn simple_string_symbol_non_capturing() {
-    let words = vec!["foo"];
-    let mut p = Pidgin::new();
-    p.add(&words);
-    p.nm_rule("foo", "bar");
-    let pattern = p.compile();
-    assert_eq!("(?:bar)", pattern);
+    assert_eq!("(?P<foo>bar)", pattern.to_string());
 }
 
 #[test]
 fn simple_rx_symbol_capturing() {
     let words = vec!["foo bar"];
     let mut p = Pidgin::new();
-    p.rx_rule(r"\s+", r"\s+", Some("ws"));
+    p.rx_rule(r"\s+", r"\s+", Some("ws")).unwrap();
     p.add(&words);
     let pattern = p.compile();
-    assert_eq!("foo(?P<ws>\\s+)bar", pattern);
+    assert_eq!("foo(?P<ws>(?:\\s+))bar", pattern.to_string());
 }
 
 #[test]
 fn simple_rx_symbol_non_capturing() {
     let words = vec!["foo bar"];
     let mut p = Pidgin::new();
-    p.rx_rule(r"\s+", r"\s+", None);
+    p.rx_rule(r"\s+", r"\s+", None).unwrap();
     p.add(&words);
     let pattern = p.compile();
-    assert_eq!("foo(?:\\s+)bar", pattern);
+    assert_eq!("foo(?:\\s+)bar", pattern.to_string());
 }
 
 #[test]
 fn string_string_symbol_ordering() {
     let words = vec!["foo f"];
     let mut p = Pidgin::new();
-    p.nm_rule("foo", "bar");
-    p.nm_rule("f", "plugh");
+    p.rule("foo", &Pidgin::grammar(&["bar"]));
+    p.rule("f", &Pidgin::grammar(&["plugh"]));
     p.add(&words);
     let pattern = p.compile();
-    assert_eq!("(?:bar) (?:plugh)", pattern);
-}
-
-#[test]
-fn capturing_versus_non_capturing_symbol_ordering() {
-    let words = vec!["foo"];
-    let mut p = Pidgin::new();
-    p.rule("foo", "plugh");
-    p.nm_rule("foo", "bar");
-    p.add(&words);
-    let pattern = p.compile();
-    assert_eq!("(?P<foo>plugh)", pattern);
+    assert_eq!("(?P<foo>bar) (?P<f>plugh)", pattern.to_string());
 }
 
 #[test]
 fn string_regex_symbol_ordering() {
     let words = vec!["foo f"];
     let mut p = Pidgin::new();
-    p.rx_rule("foo", "bar", None);
-    p.nm_rule("f", "plugh");
+    p.rx_rule("foo", "bar", None).unwrap();
+    p.rule("f", &Pidgin::grammar(&["plugh"]));
     p.add(&words);
     let pattern = p.compile();
-    assert_eq!("(?:plugh)oo (?:plugh)", pattern);
+    assert_eq!("(?P<f>plugh)oo (?P<f>plugh)", pattern.to_string());
 }
 
 #[test]
 fn regex_regex_symbol_ordering() {
     let words = vec!["foo f"];
     let mut p = Pidgin::new();
-    p.rx_rule("foo", "bar", None);
-    p.rx_rule("f", "plugh", None);
+    p.rx_rule("foo", "bar", None).unwrap();
+    p.rx_rule("f", "plugh", None).unwrap();
     p.add(&words);
     let pattern = p.compile();
-    assert_eq!("(?:bar) (?:plugh)", pattern);
+    assert_eq!("(?:bar) (?:plugh)", pattern.to_string());
 }
 
 #[test]
@@ -210,7 +189,7 @@ fn normalize_whitespace() {
     let words = vec!["foo bar", "baz   plugh"];
     let mut p = Pidgin::new().normalize_whitespace();
     p.add(&words);
-    let pattern = p.compile();
+    let pattern = p.compile().to_string();
     let rx = Regex::new(&pattern).unwrap();
     assert!(rx.is_match("foo    bar"));
     assert!(rx.is_match("baz plugh"));
@@ -221,7 +200,7 @@ fn word_boundaries() {
     let words = vec!["tardigrade", "onomatopoeia"];
     let mut p = Pidgin::new().word_bound();
     p.add(&words);
-    let pattern = p.compile();
+    let pattern = p.compile().to_string();
     let rx = Regex::new(&pattern).unwrap();
     for w in words {
         assert!(rx.is_match(w));
@@ -241,7 +220,7 @@ fn line_boundaries() {
     let words = vec!["tardigrade", "onomatopoeia"];
     let mut p = Pidgin::new().line_bound();
     p.add(&words);
-    let pattern = p.compile();
+    let pattern = p.compile().to_string();
     let rx = Regex::new(&pattern).unwrap();
     for w in words {
         assert!(rx.is_match(w), format!("{} matches '{}", pattern, w));
@@ -275,7 +254,7 @@ fn string_boundaries() {
     let words = vec!["tardigrade", "onomatopoeia"];
     let mut p = Pidgin::new().string_bound();
     p.add(&words);
-    let pattern = p.compile();
+    let pattern = p.compile().to_string();
     let rx = Regex::new(&pattern).unwrap();
     for w in words {
         assert!(rx.is_match(w), format!("{} matches '{}", pattern, w));
@@ -307,24 +286,26 @@ fn string_boundaries() {
 #[test]
 fn rule_ordering() {
     let mut p = Pidgin::new();
-    p.rule("foo", "(?P<alpha>[a-zA-Z]+)");
-    p.rule("foo", r"(?P<numeric>\d+)");
-    p.rule("foo", r"(?P<alphanumeric>[\da-zA-Z]+)");
+    p.foreign_rule("foo", "(?P<alpha>[a-zA-Z]+)").unwrap();
+    p.foreign_rule("foo", r"(?P<numeric>\d+)").unwrap();
+    p.foreign_rule("foo", r"(?P<alphanumeric>[\da-zA-Z]+)")
+        .unwrap();
     p.add(&["foo"]);
-    let pattern = p.compile();
+    let pattern = p.compile().to_string();
     let rx = Regex::new(&pattern).unwrap();
     let cap = rx.captures("1234").unwrap();
-    assert!(cap.name("foo").is_some(), "pattern matched");
+    assert!(cap.name("foo").is_some(), format!("{} matched", rx));
     assert!(cap.name("numeric").is_some(), "right order");
     let cap = rx.captures("abc").unwrap();
     assert!(cap.name("foo").is_some(), "pattern matched");
     assert!(cap.name("alpha").is_some(), "right order");
     p.clear();
-    p.rule("foo", r"(?P<alphanumeric>[\da-zA-Z]+)");
-    p.rule("foo", "(?P<alpha>[a-zA-Z]+)");
-    p.rule("foo", r"(?P<numeric>\d+)");
+    p.foreign_rule("foo", r"(?P<alphanumeric>[\da-zA-Z]+)")
+        .unwrap();
+    p.foreign_rule("foo", "(?P<alpha>[a-zA-Z]+)").unwrap();
+    p.foreign_rule("foo", r"(?P<numeric>\d+)").unwrap();
     p.add(&["foo"]);
-    let pattern = p.compile();
+    let pattern = p.compile().to_string();
     let rx = Regex::new(&pattern).unwrap();
     let cap = rx.captures("1234").unwrap();
     assert!(cap.name("foo").is_some(), "pattern matched");
@@ -341,4 +322,40 @@ fn case_sensitivity() {
     p.add(&words);
     let pattern = p.compile();
     all_equal(&vec!["CAT", "DOG"], &pattern);
+}
+
+#[test]
+fn nested_capturing() {
+    let mut p = Pidgin::new()
+        .word_bound()
+        .normalize_whitespace()
+        .case_insensitive(true);
+    let apples = p.add(&vec!["pippin", "northern spy", "crab"]).compile();
+    let oranges = p.add(&vec!["blood", "navel", "valencia"]).compile();
+    p.rule("apple", &apples);
+    p.rule("orange", &oranges);
+    let fruit = p.add(&vec!["apple", "orange"]).compile();
+    let lettuces = p.add(&vec!["red", "green", "boston", "romaine"]).compile();
+    let tomatoes = p
+        .add(&vec!["cherry", "brandywine", "beefsteak", "roma"])
+        .compile();
+    p.rule("lettuce", &lettuces);
+    p.rule("tomatoe", &tomatoes);
+    let vegetables = p.add(&vec!["lettuce", "tomatoe"]).compile();
+    p.rule("vegetable", &vegetables);
+    p.rule("fruit", &fruit);
+    let matcher = p
+        .add(&vec!["fruit", "vegetable"])
+        .compile()
+        .matcher()
+        .unwrap();
+    assert!(matcher.is_match("cherry"));
+    let captures = matcher.parse("cherry").unwrap();
+    assert_eq!(captures.name("vegetable").unwrap().value(), "cherry");
+    assert_eq!(captures.name("tomatoe").unwrap().value(), "cherry");
+    assert!(matcher.is_match("Brandywine"));
+    let captures = matcher.parse("  Northern  Spy  ").unwrap();
+    assert_eq!(captures.name("fruit").unwrap().value(), "Northern  Spy");
+    assert_eq!(captures.name("apple").unwrap().value(), "Northern  Spy");
+    assert!(!matcher.is_match("tomatoes"));
 }

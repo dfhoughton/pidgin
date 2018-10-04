@@ -110,18 +110,23 @@ impl Pidgin {
             phrases: Vec::new(),
         }
     }
-    pub fn rx(words: &[&str]) -> String {
+    pub fn grammar(words: &[&str]) -> Grammar {
         let mut p = Pidgin::new();
         p.add(words);
-        p.compile().to_string(&Flags::defaults())
+        p.compile()
     }
-    pub fn add(&mut self, phrases: &[&str]) {
+    pub fn rx(words: &[&str]) -> String {
+        Pidgin::grammar(words).to_string()
+    }
+    pub fn add(&mut self, phrases: &[&str]) -> &mut Pidgin {
         for w in phrases {
             self.phrases.push(w.to_string());
         }
+        self
     }
-    pub fn add_str(&mut self, s: &str) {
+    pub fn add_str(&mut self, s: &str) -> &mut Pidgin {
         self.phrases.push(s.to_string());
+        self
     }
     pub fn clear(&mut self) {
         self.symbols.clear();
@@ -152,12 +157,6 @@ impl Pidgin {
                 Ok(())
             }
         }
-    }
-    pub fn nm_rule(&mut self, name: &str, g: &Grammar) {
-        let mut g = g.clone();
-        g.name = None;
-        g.flags.enclosed = true;
-        self.add_symbol(Symbol::S(name.to_string()), Expression::Grammar(g, false));
     }
     pub fn rx_rule(
         &mut self,
@@ -396,7 +395,7 @@ impl Pidgin {
     fn init(&self) -> Vec<Vec<Expression>> {
         let mut symbols: BTreeMap<Symbol, Expression> = BTreeMap::new();
         for (sym, v) in self.symbols.iter() {
-            let v = if v.len() > 1 {
+            let mut v = if v.len() > 1 {
                 // dedup vector
                 let mut v2 = Vec::with_capacity(v.len());
                 let mut set = BTreeSet::new();
@@ -413,7 +412,26 @@ impl Pidgin {
             let e = if v.len() == 1 {
                 v[0].clone()
             } else {
-                Expression::Alternation(v, false)
+                let name = if let Expression::Grammar(ref mut g, _) = v[0] {
+                    g.name.clone()
+                } else {
+                    panic!("we should only have grammars at this point")
+                };
+                if name.is_some() {
+                    for g in &mut v {
+                        if let Expression::Grammar(g, _) = g {
+                            g.clear_name();
+                        }
+                    }
+                }
+                Expression::Grammar(
+                    Grammar {
+                        name,
+                        flags: self.flags.clone(),
+                        sequence: vec![Expression::Alternation(v, false)],
+                    },
+                    false,
+                )
             };
             symbols.insert(sym.clone(), e);
         }
@@ -445,7 +463,7 @@ impl Pidgin {
                 if match_length > 1 {
                     let s = phrase[i..i + rep_length]
                         .iter()
-                        .map(|e| e.to_string(&self.flags))
+                        .map(|e| e.to_s(&self.flags))
                         .collect::<Vec<String>>()
                         .join("");
                     let existing_length = s.len();
@@ -719,6 +737,9 @@ pub struct Grammar {
 }
 
 impl Grammar {
+    fn clear_name(&mut self) {
+        self.name = None;
+    }
     fn needs_closure(&self, context: &Flags) -> bool {
         self.flags.enclosed || self.needs_flags_set(context)
     }
@@ -777,7 +798,7 @@ impl Grammar {
         Matcher::new(&self)
     }
     // mostly for debugging -- this is likely not to compile due to repeated names
-    pub fn to_string(&self, context: &Flags) -> String {
+    fn to_s(&self, context: &Flags) -> String {
         let mut s = if self.name.is_some() {
             format!("(?P<{}>", self.name.as_ref().unwrap())
         } else {
@@ -787,7 +808,7 @@ impl Grammar {
             s = s + format!("(?{}:", self.flags(context)).as_str();
         }
         for e in &self.sequence {
-            s += e.to_string(&self.flags).as_ref();
+            s += e.to_s(&self.flags).as_ref();
         }
         if self.needs_closure(context) {
             s = s + ")"
@@ -796,6 +817,9 @@ impl Grammar {
             s = s + ")"
         }
         s
+    }
+    pub fn to_string(&self) -> String {
+        self.to_s(&Flags::defaults())
     }
 }
 
@@ -865,7 +889,7 @@ impl Matcher {
             true,
         );
         if let Expression::Grammar(g, _) = g {
-            match Regex::new(&g.to_string(&Flags::defaults())) {
+            match Regex::new(&g.to_s(&Flags::defaults())) {
                 Ok(rx) => Ok(Matcher {
                     translation,
                     parentage,
@@ -958,18 +982,34 @@ impl<'t> Match<'t> {
         &self.text[self.start..self.end]
     }
     // recursive search for the value of any named pattern by this name that matched
-    pub fn name(&self, name: &str) -> Option<&'t str> {
+    pub fn name(&self, name: &str) -> Option<&Match> {
         if self.name == name {
-            Some(self.value())
+            Some(self)
         } else {
             if self.children.is_some() {
                 for m in self.children.as_ref().unwrap() {
                     if let Some(n) = m.name(name) {
-                        return Some(n)
+                        return Some(n);
                     }
                 }
             }
             None
+        }
+    }
+    // collect all the times this rule matched
+    pub fn all_names(&self, name: &str) -> Vec<&Match> {
+        let mut v = Vec::new();
+        self.collect(name, &mut v);
+        v
+    }
+    fn collect(&'t self, name: &str, names: &mut Vec<&'t Match<'t>>) {
+        if self.name == name {
+            names.push(self);
+        }
+        if self.children.is_some() {
+            for m in self.children.as_ref().unwrap() {
+                m.collect(name, names);
+            }
         }
     }
 }
@@ -1046,7 +1086,14 @@ impl Ord for Symbol {
     fn cmp(&self, other: &Symbol) -> Ordering {
         match self {
             &Symbol::S(ref s1) => match other {
-                &Symbol::S(ref s2) => s1.cmp(s2),
+                &Symbol::S(ref s2) => {
+                    let o = s2.len().cmp(&s1.len());
+                    if o != Ordering::Equal {
+                        o
+                    } else {
+                        s1.cmp(s2)
+                    }
+                }
                 _ => Ordering::Less,
             },
             Symbol::Rx(r1) => match other {
@@ -1099,27 +1146,27 @@ impl Expression {
             Expression::Raw(_) => false,
         }
     }
-    fn to_string(&self, context: &Flags) -> String {
+    fn to_s(&self, context: &Flags) -> String {
         // String::new()
         let s = match self {
             Expression::Char(c, _) => escape(&c.to_string()),
             Expression::Alternation(v, _) => {
                 if v.len() == 1 {
-                    v[0].to_string(context)
+                    v[0].to_s(context)
                 } else {
                     let mut s = String::from("(?:");
                     for (i, e) in v.iter().enumerate() {
                         if i > 0 {
                             s.push('|');
                         }
-                        s += &e.to_string(context);
+                        s += &e.to_s(context);
                     }
                     s.push(')');
                     s
                 }
             }
             Expression::Repetition(e, n, _) => {
-                let mut s = e.to_string(context);
+                let mut s = e.to_s(context);
                 let reps = format!("{{{}}}", n);
                 if is_atomic(&s) {
                     s + reps.as_str()
@@ -1129,10 +1176,10 @@ impl Expression {
             }
             Expression::Sequence(v, _) => v
                 .iter()
-                .map(|e| e.to_string(context))
+                .map(|e| e.to_s(context))
                 .collect::<Vec<_>>()
                 .join(""),
-            Expression::Grammar(g, _) => g.to_string(context),
+            Expression::Grammar(g, _) => g.to_s(context),
             Expression::Part(s, _) => s.clone(),
             Expression::Raw(s) => s.clone(),
         };

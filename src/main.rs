@@ -44,7 +44,7 @@ fn main() {
     }
     let months = p.compile();
     for i in 1..31 {
-        p.add_str(i.to_string().as_str())
+        p.add_str(i.to_string().as_str());
     }
     let monthdays = p.compile();
     p = p.string_bound().normalize_whitespace();
