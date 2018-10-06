@@ -368,3 +368,12 @@ fn condense_repeated_non_capturing_grammars() {
 	let pattern = p.add_str("foofoo").compile_non_capturing();
 	assert_eq!(pattern.to_string(), "(?:ba[rz]|foo|plugh){2}");
 }
+
+#[test]
+fn repeated_grammars_not_condensed() {
+    let mut p = Pidgin::new();
+	let foo = p.add(&vec!["foo","bar","baz","plugh"]).compile();
+	p.rule("foo", &foo);
+	let pattern = p.add_str("foofoo").compile();
+	assert_eq!(pattern.to_string(), "(?P<foo>(?:ba[rz]|foo|plugh))(?P<foo>(?:ba[rz]|foo|plugh))");
+}
