@@ -5,31 +5,6 @@ extern crate lazy_static;
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-fn is_atomic(s: &str) -> bool {
-    lazy_static! {
-        static ref ATOMIC: Regex = Regex::new(
-            r"(?x)
-                \A
-                (?:
-                    .
-                        |
-                    \[ (?: [^\]] | \\. )+ \]
-                        |
-                    \( (?: [^)] | \\. )+ \)
-                        |
-                    \\ (?: # there are more of these, but we only match the less obscure ones
-                        [pP] (?: [a-zA-Z] | \{ [a-zA-Z]+ \})
-                            |
-                        .
-                    )
-                )
-                \z
-            "
-        ).unwrap();
-    }
-    ATOMIC.is_match(s)
-}
-
 #[derive(Clone, Debug)]
 struct Flags {
     case_insensitive: bool,
@@ -518,7 +493,7 @@ impl Pidgin {
         if phrases.len() == 1 {
             return self.condense(phrases[0].clone());
         }
-        let (prefix, suffix) = common_adfixes(phrases);
+        let (prefix, suffix) = self.common_adfixes(phrases);
         let mut prefix = self.condense(prefix);
         let mut suffix = self.condense(suffix);
         phrases.sort();
@@ -538,8 +513,8 @@ impl Pidgin {
             let mut v = v.iter().map(|v| (*v).clone()).collect();
             rv.push(self.recursive_compile(&mut v));
         }
-        rv.sort_by(vec_sort);
-        rv = find_character_classes(rv);
+        rv.sort_by(Pidgin::vec_sort);
+        rv = self.find_character_classes(rv);
         // should pull out character classes at this point
         let alternates: Vec<Expression> = rv
             .iter()
@@ -549,186 +524,180 @@ impl Pidgin {
         prefix.append(&mut suffix);
         prefix
     }
-}
-// sort simple stuff first
-// this makes it easier to find character ranges, and has the side effect of
-// putting the stuff easier to match earlier in alternations
-fn vec_sort(a: &Vec<Expression>, b: &Vec<Expression>) -> Ordering {
-    let o = a.len().cmp(&b.len());
-    if o != Ordering::Equal {
-        return o;
-    }
-    for i in 0..a.len() {
-        let o = a[i].cmp(&b[i]);
+    // sort simple stuff first
+    // this makes it easier to find character ranges, and has the side effect of
+    // putting the stuff easier to match earlier in alternations
+    fn vec_sort(a: &Vec<Expression>, b: &Vec<Expression>) -> Ordering {
+        let o = a.len().cmp(&b.len());
         if o != Ordering::Equal {
             return o;
         }
+        for i in 0..a.len() {
+            let o = a[i].cmp(&b[i]);
+            if o != Ordering::Equal {
+                return o;
+            }
+        }
+        Ordering::Equal
     }
-    Ordering::Equal
-}
 
-fn common_adfixes(phrases: &mut Vec<Vec<Expression>>) -> (Vec<Expression>, Vec<Expression>) {
-    let mut len = 0;
-    let mut inverted = false;
-    phrases.sort_by(|a, b| a.len().cmp(&b.len()));
-    'outer1: for i in 0..phrases[0].len() {
-        let e = &phrases[0][i];
-        for v in &phrases[1..phrases.len()] {
-            if e != &v[i] {
-                break 'outer1;
+    fn common_adfixes(&self, phrases: &mut Vec<Vec<Expression>>) -> (Vec<Expression>, Vec<Expression>) {
+        let mut len = 0;
+        let mut inverted = false;
+        phrases.sort_by(|a, b| a.len().cmp(&b.len()));
+        'outer1: for i in 0..phrases[0].len() {
+            let e = &phrases[0][i];
+            for v in &phrases[1..phrases.len()] {
+                if e != &v[i] {
+                    break 'outer1;
+                }
             }
+            len += 1;
         }
-        len += 1;
-    }
-    let prefix = if len == 0 {
-        Vec::new()
-    } else {
-        let prefix = phrases[0][0..len].to_vec();
-        for i in 0..phrases.len() {
-            let l = phrases[i].len() - len;
-            phrases[i].reverse();
-            phrases[i].truncate(l);
-        }
-        inverted = true;
-        // if the shortest vector is the entire prefix, there can be no common suffix
-        if phrases[0].len() == 0 {
-            for ref mut v in phrases {
-                v.reverse();
-            }
-            return (prefix, Vec::new());
-        }
-        prefix
-    };
-    len = 0;
-    'outer2: for i in 0..phrases[0].len() {
-        let index = if inverted {
-            i
+        let prefix = if len == 0 {
+            Vec::new()
         } else {
-            &phrases[0].len() - i - 1
-        };
-        let e = &phrases[0][index];
-        for v in &phrases[1..phrases.len()] {
-            let index = if inverted { i } else { v.len() - i - 1 };
-            if e != &v[index] {
-                break 'outer2;
-            }
-        }
-        len += 1;
-    }
-    let suffix = if len == 0 {
-        if inverted {
-            for mut v in phrases {
-                v.reverse();
-            }
-        }
-        Vec::new()
-    } else {
-        let mut suffix = if inverted {
-            phrases[0][0..len].to_vec()
-        } else {
-            let l = phrases[0].len();
-            phrases[0][(l - len)..l].to_vec()
-        };
-        for i in 0..phrases.len() {
-            let l = phrases[i].len() - len;
-            if inverted {
+            let prefix = phrases[0][0..len].to_vec();
+            for i in 0..phrases.len() {
+                let l = phrases[i].len() - len;
                 phrases[i].reverse();
+                phrases[i].truncate(l);
             }
-            phrases[i].truncate(l);
-        }
-        if inverted {
-            suffix.reverse();
-        }
-        suffix
-    };
-    (prefix, suffix)
-}
-fn find_character_classes(mut phrases: Vec<Vec<Expression>>) -> Vec<Vec<Expression>> {
-    let mut char_count = 0;
-    for v in &phrases {
-        if v.len() > 1 {
-            break;
-        }
-        if let Expression::Char(_, _) = v[0] {
-            char_count += 1;
-        } else {
-            break;
-        }
-    }
-    if char_count < 2 {
-        return phrases;
-    }
-    if char_count == phrases.len() {
-        let e = Expression::Part(format!("[{}]", to_character_class(&phrases)), false);
-        return vec![vec![e]];
-    } else if char_count > 2 {
-        let e = Expression::Part(
-            format!("[{}]", to_character_class(&phrases[0..char_count])),
-            false,
-        );
-        let mut v = vec![vec![e]];
-        let l = phrases.len();
-        v.append(&mut phrases[char_count..l].to_vec());
-        return v;
-    } else {
-        return phrases;
-    }
-}
-fn to_character_class(phrases: &[Vec<Expression>]) -> String {
-    let cv: Vec<char> = phrases
-        .iter()
-        .map(|v| match v[0] {
-            Expression::Char(c, _) => c,
-            _ => panic!("we should never get here"),
-        }).collect();
-    char_ranges(cv)
-        .iter()
-        .map(|cr| match cr {
-            CharRange::C(c) => character_class_escape(*c),
-            CharRange::CC(c1, c2) => format!(
-                "{}-{}",
-                character_class_escape(*c1),
-                character_class_escape(*c2)
-            ),
-        }).collect::<Vec<String>>()
-        .join("")
-}
-fn char_ranges(chars: Vec<char>) -> Vec<CharRange> {
-    let mut v: Vec<CharRange> = Vec::with_capacity(chars.len());
-    let mut c1i = chars[0] as u8;
-    let mut li = c1i;
-    let l = chars.len();
-    for c2 in chars[1..l].iter() {
-        let c2i = *c2 as u8;
-        if c2i - 1 == li {
-            li = c2i;
-        } else {
-            if c1i + 1 < li {
-                v.push(CharRange::CC(c1i as char, li as char));
-            } else if c1i == li {
-                v.push(CharRange::C(c1i as char));
+            inverted = true;
+            // if the shortest vector is the entire prefix, there can be no common suffix
+            if phrases[0].len() == 0 {
+                for ref mut v in phrases {
+                    v.reverse();
+                }
+                return (prefix, Vec::new());
+            }
+            prefix
+        };
+        len = 0;
+        'outer2: for i in 0..phrases[0].len() {
+            let index = if inverted {
+                i
             } else {
-                v.push(CharRange::C(c1i as char));
-                v.push(CharRange::C(li as char));
+                &phrases[0].len() - i - 1
+            };
+            let e = &phrases[0][index];
+            for v in &phrases[1..phrases.len()] {
+                let index = if inverted { i } else { v.len() - i - 1 };
+                if e != &v[index] {
+                    break 'outer2;
+                }
             }
-            c1i = c2i;
-            li = c2i;
+            len += 1;
+        }
+        let suffix = if len == 0 {
+            if inverted {
+                for mut v in phrases {
+                    v.reverse();
+                }
+            }
+            Vec::new()
+        } else {
+            let mut suffix = if inverted {
+                phrases[0][0..len].to_vec()
+            } else {
+                let l = phrases[0].len();
+                phrases[0][(l - len)..l].to_vec()
+            };
+            for i in 0..phrases.len() {
+                let l = phrases[i].len() - len;
+                if inverted {
+                    phrases[i].reverse();
+                }
+                phrases[i].truncate(l);
+            }
+            if inverted {
+                suffix.reverse();
+            }
+            suffix
+        };
+        (prefix, suffix)
+    }
+    fn find_character_classes(&self, mut phrases: Vec<Vec<Expression>>) -> Vec<Vec<Expression>> {
+        let mut char_count = 0;
+        for v in &phrases {
+            if v.len() > 1 {
+                break;
+            }
+            if let Expression::Char(_, _) = v[0] {
+                char_count += 1;
+            } else {
+                break;
+            }
+        }
+        if char_count < 2 {
+            return phrases;
+        }
+        if char_count == phrases.len() {
+            let e = Expression::Part(format!("[{}]", self.to_character_class(&phrases)), false);
+            return vec![vec![e]];
+        } else if char_count > 2 {
+            let e = Expression::Part(
+                format!("[{}]", self.to_character_class(&phrases[0..char_count])),
+                false,
+            );
+            let mut v = vec![vec![e]];
+            let l = phrases.len();
+            v.append(&mut phrases[char_count..l].to_vec());
+            return v;
+        } else {
+            return phrases;
         }
     }
-    if c1i + 1 < li {
-        v.push(CharRange::CC(c1i as char, li as char));
-    } else if c1i == li {
-        v.push(CharRange::C(c1i as char));
-    } else {
-        v.push(CharRange::C(c1i as char));
-        v.push(CharRange::C(li as char));
+    fn to_character_class(&self, phrases: &[Vec<Expression>]) -> String {
+        let cv: Vec<char> = phrases
+            .iter()
+            .map(|v| match v[0] {
+                Expression::Char(c, _) => c,
+                _ => panic!("we should never get here"),
+            }).collect();
+        self.char_ranges(cv)
+            .iter()
+            .map(|cr| match cr {
+                CharRange::C(c) => character_class_escape(*c),
+                CharRange::CC(c1, c2) => format!(
+                    "{}-{}",
+                    character_class_escape(*c1),
+                    character_class_escape(*c2)
+                ),
+            }).collect::<Vec<String>>()
+            .join("")
     }
-    v
-}
-fn character_class_escape(c: char) -> String {
-    match c {
-        '\\' | '-' | '[' | '^' | ']' | '&' | '~' => format!("\\{}", c),
-        _ => format!("{}", c),
+    fn char_ranges(&self, chars: Vec<char>) -> Vec<CharRange> {
+        let mut v: Vec<CharRange> = Vec::with_capacity(chars.len());
+        let mut c1i = chars[0] as u8;
+        let mut li = c1i;
+        let l = chars.len();
+        for c2 in chars[1..l].iter() {
+            let c2i = *c2 as u8;
+            if c2i - 1 == li {
+                li = c2i;
+            } else {
+                if c1i + 1 < li {
+                    v.push(CharRange::CC(c1i as char, li as char));
+                } else if c1i == li {
+                    v.push(CharRange::C(c1i as char));
+                } else {
+                    v.push(CharRange::C(c1i as char));
+                    v.push(CharRange::C(li as char));
+                }
+                c1i = c2i;
+                li = c2i;
+            }
+        }
+        if c1i + 1 < li {
+            v.push(CharRange::CC(c1i as char, li as char));
+        } else if c1i == li {
+            v.push(CharRange::C(c1i as char));
+        } else {
+            v.push(CharRange::C(c1i as char));
+            v.push(CharRange::C(li as char));
+        }
+        v
     }
 }
 
@@ -829,6 +798,55 @@ impl Grammar {
         self.to_s(&Flags::defaults())
     }
 }
+
+impl PartialOrd for Grammar {
+    fn partial_cmp(&self, other: &Grammar) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Grammar {
+    fn cmp(&self, other: &Grammar) -> Ordering {
+        let o = self.sequence.len().cmp(&other.sequence.len());
+        if o != Ordering::Equal {
+            return o;
+        }
+        if self.name.is_some() ^ other.name.is_some() {
+            return if self.name.is_some() {
+                Ordering::Greater
+            } else {
+                Ordering::Less
+            };
+        }
+        if self.name.is_some() {
+            let o = self
+                .name
+                .as_ref()
+                .unwrap()
+                .cmp(&other.name.as_ref().unwrap());
+            if o != Ordering::Equal {
+                return o;
+            }
+        }
+        for i in 0..self.sequence.len() {
+            let v1 = &self.sequence[i];
+            let v2 = &other.sequence[i];
+            let o = v1.cmp(&v2);
+            if o != Ordering::Equal {
+                return o;
+            }
+        }
+        self.flags.cmp(&other.flags)
+    }
+}
+
+impl PartialEq for Grammar {
+    fn eq(&self, other: &Grammar) -> bool {
+        self.cmp(other) == Ordering::Equal
+    }
+}
+
+impl Eq for Grammar {}
 
 #[derive(Debug)]
 pub struct Matcher {
@@ -1021,54 +1039,125 @@ impl<'t> Match<'t> {
     }
 }
 
-impl PartialOrd for Grammar {
-    fn partial_cmp(&self, other: &Grammar) -> Option<Ordering> {
-        Some(self.cmp(other))
+#[cfg(test)]
+mod tests {
+    use is_atomic;
+    #[test]
+    fn single_characters_are_atomic() {
+        for c in String::from("abc.").chars() {
+            assert!(is_atomic(&c.to_string()));
+        }
+    }
+    #[test]
+    fn two_chars_where_first_is_not_slash_non_atomic() {
+        let words = vec!["aa", "bc", ".."];
+        for w in words {
+            assert!(!is_atomic(w));
+        }
+    }
+    #[test]
+    fn leading_slash_then_char_is_atomic() {
+        let words = vec![r"\a", r"\c", r"\."];
+        for w in words {
+            assert!(is_atomic(w));
+        }
+    }
+    #[test]
+    fn simple_char_class_is_atomic() {
+        let words = vec![r"[.]", r"[asdf]", r"[0-9]", r"[^0-9]", r"[(as)]"];
+        for w in words {
+            assert!(is_atomic(w));
+        }
+    }
+    #[test]
+    fn sequence_of_char_class_is_not_atomic() {
+        let words = vec![r"[.][.]", r"[asdf][asdf]", r"[0-9][0-9]", r"[^0-9][^0-9]", r"[(as)][(as)]"];
+        for w in words {
+            assert!(!is_atomic(w));
+        }
+    }
+    #[test]
+    fn simple_char_class_with_escape_is_atomic() {
+        let words = vec![r"[\[.]", r"[\]asdf]", r"[\.0-9]", r"[\^0-9]", r"[(as\)]"];
+        for w in words {
+            assert!(is_atomic(w));
+        }
+    }
+    #[test]
+    fn group_is_atomic() {
+        let words = vec![r"([x[^xyz]])", r"(....)"];
+        for w in words {
+            assert!(is_atomic(w));
+        }
+    }
+    #[test]
+    fn sequence_of_groups_is_not_atomic() {
+        let words = vec![r"([x[^xyz]])(as)", r"(....)(foo)"];
+        for w in words {
+            assert!(!is_atomic(w));
+        }
+    }
+    #[test]
+    fn p_named_char_class_is_atomic() {
+        let words = vec![r"\pN", r"\PN", r"\p{Greek}", r"\P{Greek}"];
+        for w in words {
+            assert!(is_atomic(w));
+        }
+    }
+    #[test]
+    fn char_and_p_named_char_class_is_not_atomic() {
+        let words = vec![r"\pNa", r"a\PN", r"\p{Greek}a", r"a\P{Greek}"];
+        for w in words {
+            assert!(!is_atomic(w));
+        }
+    }
+    #[test]
+    fn one_level_char_class_nesting() {
+        let words = vec![r"[[:alpha:]]", r"[x[^xyz]]", r"[0-9&&[^4]"];
+        for w in words {
+            assert!(is_atomic(w));
+        }
+    }
+    #[test]
+    fn one_level_group_nesting() {
+        let words = vec![r"(a(b))", r"((abc))", r"((abc)defg(geh))"];
+        for w in words {
+            assert!(is_atomic(w));
+        }
     }
 }
 
-impl Ord for Grammar {
-    fn cmp(&self, other: &Grammar) -> Ordering {
-        let o = self.sequence.len().cmp(&other.sequence.len());
-        if o != Ordering::Equal {
-            return o;
-        }
-        if self.name.is_some() ^ other.name.is_some() {
-            return if self.name.is_some() {
-                Ordering::Greater
-            } else {
-                Ordering::Less
-            };
-        }
-        if self.name.is_some() {
-            let o = self
-                .name
-                .as_ref()
-                .unwrap()
-                .cmp(&other.name.as_ref().unwrap());
-            if o != Ordering::Equal {
-                return o;
-            }
-        }
-        for i in 0..self.sequence.len() {
-            let v1 = &self.sequence[i];
-            let v2 = &other.sequence[i];
-            let o = v1.cmp(&v2);
-            if o != Ordering::Equal {
-                return o;
-            }
-        }
-        self.flags.cmp(&other.flags)
+fn is_atomic(s: &str) -> bool {
+    lazy_static! {
+        static ref ATOMIC: Regex = Regex::new(
+            r"(?x)
+                \A
+                (?:
+                    .
+                        |
+                    \[ (?: [^\]] | \\. | \[[^\[\]]+\] )+ \]
+                        |
+                    \( (?: [^)] | \\. | \([^()]+\) )+ \)
+                        |
+                    \\ (?: # there are more of these, but we only match the less obscure ones
+                        [pP] (?: [a-zA-Z] | \{ [a-zA-Z]+ \})
+                            |
+                        .
+                    )
+                )
+                \z
+            "
+        ).unwrap();
     }
+    ATOMIC.is_match(s)
 }
 
-impl PartialEq for Grammar {
-    fn eq(&self, other: &Grammar) -> bool {
-        self.cmp(other) == Ordering::Equal
+fn character_class_escape(c: char) -> String {
+    match c {
+        '\\' | '-' | '[' | '^' | ']' | '&' | '~' => format!("\\{}", c),
+        _ => format!("{}", c),
     }
 }
-
-impl Eq for Grammar {}
 
 enum CharRange {
     C(char),
