@@ -361,10 +361,10 @@ fn nested_capturing() {
 }
 
 #[test]
-fn find_repeated_grammars() {
+fn condense_repeated_non_capturing_grammars() {
     let mut p = Pidgin::new();
 	let foo = p.add(&vec!["foo","bar","baz","plugh"]).compile();
 	p.rule("foo", &foo);
 	let pattern = p.add_str("foofoo").compile_non_capturing();
-	assert_eq!(pattern.to_string(), "(?foo){2}");
+	assert_eq!(pattern.to_string(), "(?:ba[rz]|foo|plugh){2}");
 }

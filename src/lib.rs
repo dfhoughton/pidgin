@@ -443,7 +443,7 @@ impl Pidgin {
             .map(|s| self.digest(s, &symbols))
             .collect()
     }
-    fn compress(&self, mut phrase: Vec<Expression>) -> Vec<Expression> {
+    fn condense(&self, mut phrase: Vec<Expression>) -> Vec<Expression> {
         if phrase.len() < 2 {
             return phrase;
         }
@@ -516,11 +516,11 @@ impl Pidgin {
             return Vec::new();
         }
         if phrases.len() == 1 {
-            return self.compress(phrases[0].clone());
+            return self.condense(phrases[0].clone());
         }
         let (prefix, suffix) = common_adfixes(phrases);
-        let mut prefix = self.compress(prefix);
-        let mut suffix = self.compress(suffix);
+        let mut prefix = self.condense(prefix);
+        let mut suffix = self.condense(suffix);
         phrases.sort();
         let mut map: BTreeMap<&Expression, Vec<&Vec<Expression>>> = BTreeMap::new();
         let mut optional = false;
