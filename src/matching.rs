@@ -1,6 +1,6 @@
 extern crate regex;
 use grammar::Grammar;
-use regex::{Captures, Regex};
+use regex::{Captures, Error, Regex};
 use std::collections::HashMap;
 use util::{Expression, Flags};
 
@@ -18,7 +18,7 @@ impl Matcher {
             Some(captures) => {
                 let c = captures.get(0).unwrap();
                 let mut m = Match {
-                    name: self.root.clone(),
+                    rule: self.root.clone(),
                     text: s,
                     start: c.start(),
                     end: c.end(),
@@ -41,7 +41,7 @@ impl Matcher {
                     let name = self.translation.get(c).unwrap();
                     let mut child = Match {
                         text,
-                        name: name.clone(),
+                        rule: name.clone(),
                         start: n.start(),
                         end: n.end(),
                         children: None,
@@ -52,7 +52,7 @@ impl Matcher {
             }
         }
     }
-    pub(crate) fn new(g: &Grammar) -> Result<Matcher, regex::Error> {
+    pub(crate) fn new(g: &Grammar) -> Result<Matcher, Error> {
         let mut idx = 0;
         let mut translation = HashMap::new();
         let mut parentage = HashMap::new();
@@ -136,7 +136,7 @@ impl Matcher {
 
 #[derive(Debug)]
 pub struct Match<'t> {
-    name: String,
+    rule: String,
     text: &'t str,
     start: usize,
     end: usize,
@@ -144,14 +144,8 @@ pub struct Match<'t> {
 }
 
 impl<'t> Match<'t> {
-    pub fn rule(&self) -> &str {
-        &self.name
-    }
-    pub fn children(&self) -> Option<&[Match<'t>]> {
-        match self.children.as_ref() {
-            Some(v) => Some(v),
-            None => None,
-        }
+    pub fn value(&self) -> &'t str {
+        &self.text[self.start..self.end]
     }
     pub fn start(&self) -> usize {
         self.start
@@ -159,12 +153,18 @@ impl<'t> Match<'t> {
     pub fn end(&self) -> usize {
         self.end
     }
-    pub fn value(&self) -> &'t str {
-        &self.text[self.start..self.end]
+    pub fn rule(&self) -> &str {
+        &self.rule
+    }
+    pub fn children(&self) -> Option<&[Match<'t>]> {
+        match self.children.as_ref() {
+            Some(v) => Some(v),
+            None => None,
+        }
     }
     // recursive search for the value of any named pattern by this name that matched
     pub fn name(&self, name: &str) -> Option<&Match> {
-        if self.name == name {
+        if self.rule == name {
             Some(self)
         } else {
             if self.children.is_some() {
@@ -184,7 +184,7 @@ impl<'t> Match<'t> {
         v
     }
     fn collect(&'t self, name: &str, names: &mut Vec<&'t Match<'t>>) {
-        if self.name == name {
+        if self.rule == name {
             names.push(self);
         }
         if self.children.is_some() {

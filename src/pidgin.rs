@@ -1,6 +1,7 @@
 extern crate regex;
 use grammar::Grammar;
-use regex::Regex;
+use matching::Matcher;
+use regex::{Error, Regex};
 use std::cmp::{Ord, Ordering};
 use std::collections::{BTreeMap, BTreeSet};
 use util::{character_class_escape, is_atomic, Boundary, CharRange, Expression, Flags, Symbol};
@@ -24,14 +25,6 @@ impl Pidgin {
             phrases: Vec::new(),
         }
     }
-    pub fn grammar(words: &[&str]) -> Grammar {
-        let mut p = Pidgin::new();
-        p.add(words);
-        p.compile()
-    }
-    pub fn rx(words: &[&str]) -> String {
-        Pidgin::grammar(words).to_string()
-    }
     pub fn add(&mut self, phrases: &[&str]) -> &mut Pidgin {
         for w in phrases {
             self.phrases.push(w.to_string());
@@ -42,16 +35,50 @@ impl Pidgin {
         self.phrases.push(s.to_string());
         self
     }
-    pub fn clear(&mut self) {
-        self.symbols.clear();
+    pub fn compile(&mut self) -> Grammar {
+        let mut phrases = self.init();
+        phrases.sort();
+        phrases.dedup();
+        let sequence = self.recursive_compile(phrases.as_mut());
         self.phrases.clear();
+        Grammar {
+            sequence,
+            name: None,
+            flags: self.flags.clone(),
+        }
     }
     pub fn rule(&mut self, name: &str, g: &Grammar) {
         let mut g = g.clone();
         g.name = Some(name.to_string());
         self.add_symbol(Symbol::S(name.to_string()), Expression::Grammar(g, false));
     }
-    pub fn foreign_rule(&mut self, name: &str, pattern: &str) -> Result<(), regex::Error> {
+    pub fn rx_rule(
+        &mut self,
+        rx: &str,
+        pattern: &str,
+        name: Option<&str>,
+    ) -> Result<&mut Pidgin, Error> {
+        match Regex::new(rx) {
+            Ok(rx) => {
+                let name = match name {
+                    Some(n) => Some(n.to_string()),
+                    None => None,
+                };
+                let sequence = vec![Expression::Part(pattern.to_string(), false)];
+                let mut flags = Flags::defaults();
+                flags.enclosed = !is_atomic(pattern);
+                let g = Grammar {
+                    name,
+                    sequence,
+                    flags,
+                };
+                self.add_symbol(Symbol::Rx(rx), Expression::Grammar(g, false));
+                Ok(self)
+            }
+            Err(e) => Err(e),
+        }
+    }
+    pub fn foreign_rule(&mut self, name: &str, pattern: &str) -> Result<(), Error> {
         match Regex::new(pattern) {
             Err(e) => Err(e),
             Ok(_) => {
@@ -72,31 +99,9 @@ impl Pidgin {
             }
         }
     }
-    pub fn rx_rule(
-        &mut self,
-        rx: &str,
-        pattern: &str,
-        name: Option<&str>,
-    ) -> Result<&mut Pidgin, regex::Error> {
-        match Regex::new(rx) {
-            Ok(rx) => {
-                let name = match name {
-                    Some(n) => Some(n.to_string()),
-                    None => None,
-                };
-                let sequence = vec![Expression::Part(pattern.to_string(), false)];
-                let mut flags = Flags::defaults();
-                flags.enclosed = !is_atomic(pattern);
-                let g = Grammar {
-                    name,
-                    sequence,
-                    flags,
-                };
-                self.add_symbol(Symbol::Rx(rx), Expression::Grammar(g, false));
-                Ok(self)
-            }
-            Err(e) => Err(e),
-        }
+    pub fn clear(&mut self) {
+        self.symbols.clear();
+        self.phrases.clear();
     }
     pub fn case_insensitive(mut self, case: bool) -> Pidgin {
         self.flags.case_insensitive = case;
@@ -169,6 +174,26 @@ impl Pidgin {
         self.right = Some(Boundary::String);
         self
     }
+    pub fn compile_non_capturing(&self) -> Grammar {
+        let g = self.clone().compile().clear_recursive();
+        let sequence = self.recursive_condense_sequence(&g.sequence);
+        Grammar {
+            sequence,
+            name: None,
+            flags: g.flags.clone(),
+        }
+    }
+    pub fn grammar(words: &[&str]) -> Grammar {
+        let mut p = Pidgin::new();
+        p.add(words);
+        p.compile()
+    }
+    pub fn rx(words: &[&str]) -> String {
+        Pidgin::grammar(words).to_string()
+    }
+    pub fn matcher(&self) -> Result<Matcher, Error> {
+        self.clone().compile().matcher()
+    }
     fn add_boundary_symbols(&self, phrase: &str) -> Vec<Expression> {
         lazy_static! {
             static ref UNICODE_B: Regex = Regex::new(r"\w").unwrap();
@@ -233,27 +258,6 @@ impl Pidgin {
             self.symbols.insert(s.clone(), Vec::new());
         }
         self.symbols.get_mut(&s).unwrap().push(e);
-    }
-    pub fn compile(&mut self) -> Grammar {
-        let mut phrases = self.init();
-        phrases.sort();
-        phrases.dedup();
-        let sequence = self.recursive_compile(phrases.as_mut());
-        self.phrases.clear();
-        Grammar {
-            sequence,
-            name: None,
-            flags: self.flags.clone(),
-        }
-    }
-    pub fn compile_non_capturing(&self) -> Grammar {
-        let g = self.clone().compile().clear_recursive();
-        let sequence = self.recursive_condense_sequence(&g.sequence);
-        Grammar {
-            sequence,
-            name: None,
-            flags: g.flags.clone(),
-        }
     }
     fn recursive_condense_sequence(&self, v: &Vec<Expression>) -> Vec<Expression> {
         self.condense(
@@ -526,7 +530,6 @@ impl Pidgin {
         }
         Ordering::Equal
     }
-
     fn common_adfixes(
         &self,
         phrases: &mut Vec<Vec<Expression>>,

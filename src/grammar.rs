@@ -1,4 +1,5 @@
 use matching::Matcher;
+use regex::Error;
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use util::{Expression, Flags};
 
@@ -10,16 +11,23 @@ pub struct Grammar {
 }
 
 impl Grammar {
-    pub(crate) fn clear_name(&mut self) {
-        self.name = None;
+    pub fn matcher(&self) -> Result<Matcher, Error> {
+        Matcher::new(&self)
     }
-    pub fn clear_recursive(&self) -> Grammar {
+    // mostly for debugging -- this is likely not to compile due to repeated names
+    pub fn to_string(&self) -> String {
+        self.to_s(&Flags::defaults())
+    }
+    pub(crate) fn clear_recursive(&self) -> Grammar {
         let sequence = self.sequence.iter().map(|e| e.clear_names()).collect();
         Grammar {
             sequence,
             name: None,
             flags: self.flags.clone(),
         }
+    }
+    pub(crate) fn clear_name(&mut self) {
+        self.name = None;
     }
     fn needs_closure(&self, context: &Flags) -> bool {
         self.flags.enclosed || self.needs_flags_set(context)
@@ -75,10 +83,6 @@ impl Grammar {
         }
         flags
     }
-    pub fn matcher(&self) -> Result<Matcher, regex::Error> {
-        Matcher::new(&self)
-    }
-    // mostly for debugging -- this is likely not to compile due to repeated names
     pub(crate) fn to_s(&self, context: &Flags) -> String {
         let mut s = if self.name.is_some() {
             format!("(?P<{}>", self.name.as_ref().unwrap())
@@ -98,9 +102,6 @@ impl Grammar {
             s = s + ")"
         }
         s
-    }
-    pub fn to_string(&self) -> String {
-        self.to_s(&Flags::defaults())
     }
 }
 
