@@ -1,6 +1,6 @@
-use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
-use util::{Flags,Expression};
 use matching::Matcher;
+use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
+use util::{Expression, Flags};
 
 #[derive(Clone, Debug)]
 pub struct Grammar {
@@ -13,10 +13,14 @@ impl Grammar {
     pub(crate) fn clear_name(&mut self) {
         self.name = None;
     }
-	pub fn clear_recursive(&self) -> Grammar {
-		let sequence = self.sequence.iter().map(|e| e.clear_names()).collect();
-		Grammar{ sequence, name: None, flags: self.flags.clone()}
-	}
+    pub fn clear_recursive(&self) -> Grammar {
+        let sequence = self.sequence.iter().map(|e| e.clear_names()).collect();
+        Grammar {
+            sequence,
+            name: None,
+            flags: self.flags.clone(),
+        }
+    }
     fn needs_closure(&self, context: &Flags) -> bool {
         self.flags.enclosed || self.needs_flags_set(context)
     }

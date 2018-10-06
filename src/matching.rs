@@ -1,8 +1,8 @@
 extern crate regex;
+use grammar::Grammar;
 use regex::{Captures, Regex};
 use std::collections::HashMap;
-use util::{Flags,Expression};
-use grammar::Grammar;
+use util::{Expression, Flags};
 
 #[derive(Debug)]
 pub struct Matcher {

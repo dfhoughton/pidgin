@@ -1,7 +1,7 @@
 extern crate regex;
+use grammar::Grammar;
 use regex::{escape, Regex};
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
-use grammar::Grammar;
 
 #[cfg(test)]
 mod tests {
@@ -35,7 +35,13 @@ mod tests {
     }
     #[test]
     fn sequence_of_char_class_is_not_atomic() {
-        let words = vec![r"[.][.]", r"[asdf][asdf]", r"[0-9][0-9]", r"[^0-9][^0-9]", r"[(as)][(as)]"];
+        let words = vec![
+            r"[.][.]",
+            r"[asdf][asdf]",
+            r"[0-9][0-9]",
+            r"[^0-9][^0-9]",
+            r"[(as)][(as)]",
+        ];
         for w in words {
             assert!(!is_atomic(w));
         }
@@ -114,7 +120,8 @@ pub(crate) fn is_atomic(s: &str) -> bool {
                 )
                 \z
             "
-        ).unwrap();
+        )
+        .unwrap();
     }
     ATOMIC.is_match(s)
 }
@@ -317,53 +324,53 @@ impl Expression {
             s
         }
     }
-	pub(crate) fn clear_names(&self) -> Expression {
-		match self {
-			Expression::Grammar(g, b) => Expression::Grammar(g.clear_recursive(), *b),
-			Expression::Alternation(v, b) => {
-				let v = v.iter().map(|e| e.clear_names()).collect();
-				Expression::Alternation(v, *b)
-			},
-			Expression::Sequence(v, b) => {
-				let v = v.iter().map(|e| e.clear_names()).collect();
-				Expression::Sequence(v, *b)
-			},
-			Expression::Repetition(x, n, b) => {
-				Expression::Repetition(Box::new(x.clear_names()), *n, *b)
-			},
-			_ => self.clone(),
-		}
-	}
+    pub(crate) fn clear_names(&self) -> Expression {
+        match self {
+            Expression::Grammar(g, b) => Expression::Grammar(g.clear_recursive(), *b),
+            Expression::Alternation(v, b) => {
+                let v = v.iter().map(|e| e.clear_names()).collect();
+                Expression::Alternation(v, *b)
+            }
+            Expression::Sequence(v, b) => {
+                let v = v.iter().map(|e| e.clear_names()).collect();
+                Expression::Sequence(v, *b)
+            }
+            Expression::Repetition(x, n, b) => {
+                Expression::Repetition(Box::new(x.clear_names()), *n, *b)
+            }
+            _ => self.clone(),
+        }
+    }
     pub(crate) fn has_names(&self) -> bool {
         match self {
             Expression::Grammar(g, _) => {
                 g.name.is_some() || g.sequence.iter().any(|e| e.has_names())
-            },
+            }
             Expression::Alternation(v, _) => v.iter().any(|e| e.has_names()),
             Expression::Sequence(v, _) => v.iter().any(|e| e.has_names()),
-            Expression::Repetition(x,_,_) => x.has_names(),
+            Expression::Repetition(x, _, _) => x.has_names(),
             _ => false,
         }
     }
     pub(crate) fn weight(&self) -> usize {
         match self {
-            Expression::Char(_,_) => 1,
-            Expression::Alternation(v,_) | Expression::Sequence(v,_) => {
+            Expression::Char(_, _) => 1,
+            Expression::Alternation(v, _) | Expression::Sequence(v, _) => {
                 let mut sum = 0;
                 for e in v {
                     sum += e.weight();
                 }
                 sum
-            },
-            Expression::Part(s,_) => s.len() * 2,
-            Expression::Grammar(ref g,_) => {
+            }
+            Expression::Part(s, _) => s.len() * 2,
+            Expression::Grammar(ref g, _) => {
                 let mut sum = 0;
                 for e in g.sequence.iter() {
                     sum += e.weight();
                 }
                 sum
-            },
-            Expression::Repetition(x,n,_) => x.weight() * n,
+            }
+            Expression::Repetition(x, n, _) => x.weight() * n,
             Expression::Raw(s) => s.len(),
         }
     }
@@ -377,10 +384,6 @@ impl PartialOrd for Expression {
 
 impl Ord for Expression {
     fn cmp(&self, other: &Expression) -> Ordering {
-        let o = self.weight().cmp(&other.weight());
-        if o != Ordering::Equal {
-            return o
-        }
         match self {
             &Expression::Char(c1, b1) => match other {
                 &Expression::Char(c2, b2) => match c1.cmp(&c2) {
@@ -402,11 +405,11 @@ impl Ord for Expression {
                         return o;
                     }
                     b1.cmp(&b2)
-                },
+                }
                 _ => Ordering::Less,
             },
             Expression::Sequence(v1, b1) => match other {
-                Expression::Char(_, _) | Expression::Repetition(_, _, _)=> Ordering::Greater,
+                Expression::Char(_, _) | Expression::Repetition(_, _, _) => Ordering::Greater,
                 Expression::Sequence(v2, b2) => {
                     let o = v1.len().cmp(&v2.len());
                     if o != Ordering::Equal {
@@ -421,11 +424,13 @@ impl Ord for Expression {
                         }
                     }
                     b1.cmp(&b2)
-                },
-                _  => Ordering::Less,
+                }
+                _ => Ordering::Less,
             },
             Expression::Alternation(v1, b1) => match other {
-                Expression::Char(_, _) | Expression::Repetition(_, _, _) | Expression::Sequence(_, _)=> Ordering::Greater,
+                Expression::Char(_, _)
+                | Expression::Repetition(_, _, _)
+                | Expression::Sequence(_, _) => Ordering::Greater,
                 Expression::Alternation(v2, b2) => {
                     for (i, e1) in v1.iter().enumerate() {
                         if i == v2.len() {
@@ -444,7 +449,7 @@ impl Ord for Expression {
                     } else {
                         b1.cmp(&b2)
                     }
-                },
+                }
                 _ => Ordering::Less,
             },
             Expression::Part(s1, b1) => match other {

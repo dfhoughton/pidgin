@@ -1,9 +1,9 @@
 extern crate regex;
+use grammar::Grammar;
 use regex::Regex;
 use std::cmp::{Ord, Ordering};
 use std::collections::{BTreeMap, BTreeSet};
-use util::{Flags,Boundary,Symbol,Expression,CharRange,is_atomic,character_class_escape};
-use grammar::Grammar;
+use util::{character_class_escape, is_atomic, Boundary, CharRange, Expression, Flags, Symbol};
 
 #[derive(Clone, Debug)]
 pub struct Pidgin {
@@ -246,32 +246,41 @@ impl Pidgin {
             flags: self.flags.clone(),
         }
     }
-	pub fn compile_non_capturing(&self) -> Grammar {
-		let g = self.clone().compile().clear_recursive();
+    pub fn compile_non_capturing(&self) -> Grammar {
+        let g = self.clone().compile().clear_recursive();
         let sequence = self.recursive_condense_sequence(&g.sequence);
-        Grammar{ sequence, name: None, flags: g.flags.clone() }
-	}
+        Grammar {
+            sequence,
+            name: None,
+            flags: g.flags.clone(),
+        }
+    }
     fn recursive_condense_sequence(&self, v: &Vec<Expression>) -> Vec<Expression> {
-        self.condense(v.iter().map(|e| self.recursive_condense_expression(e)).collect())
+        self.condense(
+            v.iter()
+                .map(|e| self.recursive_condense_expression(e))
+                .collect(),
+        )
     }
     fn recursive_condense_expression(&self, e: &Expression) -> Expression {
         match e {
             Expression::Grammar(g, b) => {
-                let sequence = g.sequence.iter().map(|e| self.recursive_condense_expression(e)).collect();
-                let g = Grammar{sequence, name: g.name.clone(), flags: g.flags.clone()};
+                let g = Grammar {
+                    sequence: self.recursive_condense_sequence(&g.sequence),
+                    name: g.name.clone(),
+                    flags: g.flags.clone(),
+                };
                 Expression::Grammar(g, *b)
-            },
+            }
             Expression::Alternation(v, b) => {
-                let v = v.iter().map(|e| self.recursive_condense_expression(e)).collect();
-                Expression::Alternation(v, *b)
-            },
+                Expression::Alternation(self.recursive_condense_sequence(&v), *b)
+            }
             Expression::Sequence(v, b) => {
-                let v = v.iter().map(|e| self.recursive_condense_expression(e)).collect();
-                Expression::Sequence(v, *b)
-            },
+                Expression::Sequence(self.recursive_condense_sequence(&v), *b)
+            }
             Expression::Repetition(x, n, b) => {
                 Expression::Repetition(Box::new(self.recursive_condense_expression(x)), *n, *b)
-            },
+            }
             _ => e.clone(),
         }
     }
@@ -396,7 +405,7 @@ impl Pidgin {
                 let mut j = i + rep_length;
                 'outer: while j <= phrase.len() - rep_length {
                     for k in 0..rep_length {
-                        if phrase[i + k] != phrase[j + k] || phrase[i+k].has_names() {
+                        if phrase[i + k] != phrase[j + k] || phrase[i + k].has_names() {
                             break 'outer;
                         }
                     }
@@ -493,7 +502,8 @@ impl Pidgin {
     // this makes it easier to find character ranges, and has the side effect of
     // putting the stuff easier to match earlier in alternations
     fn vec_sort(a: &Vec<Expression>, b: &Vec<Expression>) -> Ordering {
-        let mut aw = 0; let mut bw = 0;
+        let mut aw = 0;
+        let mut bw = 0;
         for e in a {
             aw += e.weight();
         }
@@ -517,7 +527,10 @@ impl Pidgin {
         Ordering::Equal
     }
 
-    fn common_adfixes(&self, phrases: &mut Vec<Vec<Expression>>) -> (Vec<Expression>, Vec<Expression>) {
+    fn common_adfixes(
+        &self,
+        phrases: &mut Vec<Vec<Expression>>,
+    ) -> (Vec<Expression>, Vec<Expression>) {
         let mut len = 0;
         let mut inverted = false;
         phrases.sort_by(|a, b| a.len().cmp(&b.len()));
@@ -630,7 +643,8 @@ impl Pidgin {
             .map(|v| match v[0] {
                 Expression::Char(c, _) => c,
                 _ => panic!("we should never get here"),
-            }).collect();
+            })
+            .collect();
         self.char_ranges(cv)
             .iter()
             .map(|cr| match cr {
@@ -640,7 +654,8 @@ impl Pidgin {
                     character_class_escape(*c1),
                     character_class_escape(*c2)
                 ),
-            }).collect::<Vec<String>>()
+            })
+            .collect::<Vec<String>>()
             .join("")
     }
     fn char_ranges(&self, chars: Vec<char>) -> Vec<CharRange> {
