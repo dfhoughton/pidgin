@@ -1133,16 +1133,19 @@ fn is_atomic(s: &str) -> bool {
             r"(?x)
                 \A
                 (?:
-                    .
+                    .                                         # single characters
                         |
-                    \[ (?: [^\]] | \\. | \[[^\[\]]+\] )+ \]
+                    \[ (?: [^\]] | \\. | \[[^\[\]]+\] )+ \]   # char classes
                         |
-                    \( (?: [^)] | \\. | \([^()]+\) )+ \)
+                    \( (?: [^)] | \\. | \([^()]+\) )+ \)      # groups
                         |
-                    \\ (?: # there are more of these, but we only match the less obscure ones
-                        [pP] (?: [a-zA-Z] | \{ [a-zA-Z]+ \})
+                    \\ (?:                                    # forward slash patterns
+
+                        # there are more of these, but we only match the less obscure ones
+
+                        [pP] (?: [a-zA-Z] | \{ [a-zA-Z]+ \})  # unicode properties
                             |
-                        .
+                        .                                     # escaped characters
                     )
                 )
                 \z
