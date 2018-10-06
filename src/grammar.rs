@@ -1,6 +1,6 @@
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use util::{Flags,Expression};
-use base::Matcher;
+use matching::Matcher;
 
 #[derive(Clone, Debug)]
 pub struct Grammar {
