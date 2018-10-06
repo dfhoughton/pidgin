@@ -31,7 +31,7 @@ fn is_atomic(s: &str) -> bool {
 }
 
 #[derive(Clone, Debug)]
-pub struct Flags {
+struct Flags {
     case_insensitive: bool,
     dot_all: bool,
     multi_line: bool,
@@ -332,6 +332,9 @@ impl Pidgin {
             flags: self.flags.clone(),
         }
     }
+	pub fn compile_non_capturing(&self) -> Grammar {
+		self.clone().compile().clear_recursive()
+	}
     // initialize
     fn digest(&self, s: &str, symbols: &BTreeMap<Symbol, Expression>) -> Vec<Expression> {
         let mut rv = self.add_boundary_symbols(s);
@@ -740,6 +743,10 @@ impl Grammar {
     fn clear_name(&mut self) {
         self.name = None;
     }
+	pub fn clear_recursive(&self) -> Grammar {
+		let sequence = self.sequence.iter().map(|e| e.clear_names()).collect();
+		Grammar{ sequence, name: None, flags: self.flags.clone()}
+	}
     fn needs_closure(&self, context: &Flags) -> bool {
         self.flags.enclosed || self.needs_flags_set(context)
     }
@@ -1193,6 +1200,23 @@ impl Expression {
             s
         }
     }
+	pub fn clear_names(&self) -> Expression {
+		match self {
+			Expression::Grammar(g, b) => Expression::Grammar(g.clear_recursive(), *b),
+			Expression::Alternation(v, b) => {
+				let v = v.iter().map(|e| e.clear_names()).collect();
+				Expression::Alternation(v, *b)
+			},
+			Expression::Sequence(v, b) => {
+				let v = v.iter().map(|e| e.clear_names()).collect();
+				Expression::Sequence(v, *b)
+			},
+			Expression::Repetition(x, n, b) => {
+				Expression::Repetition(Box::new(x.clear_names()), *n, *b)
+			},
+			_ => self.clone(),
+		}
+	}
 }
 
 impl PartialOrd for Expression {

@@ -359,3 +359,12 @@ fn nested_capturing() {
     assert_eq!(captures.name("apple").unwrap().value(), "Northern  Spy");
     assert!(!matcher.is_match("tomatoes"));
 }
+
+#[test]
+fn find_repeated_grammars() {
+    let mut p = Pidgin::new();
+	let foo = p.add(&vec!["foo","bar","baz","plugh"]).compile();
+	p.rule("foo", &foo);
+	let pattern = p.add_str("foofoo").compile_non_capturing();
+	assert_eq!(pattern.to_string(), "(?foo){2}");
+}
