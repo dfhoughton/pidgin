@@ -366,7 +366,7 @@ fn condense_repeated_non_capturing_grammars() {
 	let foo = p.add(&vec!["foo","bar","baz","plugh"]).compile();
 	p.rule("foo", &foo);
 	let pattern = p.add_str("foofoo").compile_non_capturing();
-	assert_eq!(pattern.to_string(), "(?:ba[rz]|foo|plugh){2}");
+	assert_eq!(pattern.to_string(), "(?:foo|plugh|ba[rz]){2}");
 }
 
 #[test]
@@ -375,5 +375,5 @@ fn repeated_grammars_not_condensed() {
 	let foo = p.add(&vec!["foo","bar","baz","plugh"]).compile();
 	p.rule("foo", &foo);
 	let pattern = p.add_str("foofoo").compile();
-	assert_eq!(pattern.to_string(), "(?P<foo>(?:ba[rz]|foo|plugh))(?P<foo>(?:ba[rz]|foo|plugh))");
+	assert_eq!(pattern.to_string(), "(?P<foo>(?:foo|plugh|ba[rz]))(?P<foo>(?:foo|plugh|ba[rz]))");
 }

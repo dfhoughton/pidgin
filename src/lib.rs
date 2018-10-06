@@ -4,4 +4,8 @@ extern crate lazy_static;
 
 mod base;
 mod util;
-pub use base::{Pidgin,Grammar,Matcher,Match};
+mod pidgin;
+mod grammar;
+pub use pidgin::Pidgin;
+pub use grammar::Grammar;
+pub use base::{Matcher,Match};

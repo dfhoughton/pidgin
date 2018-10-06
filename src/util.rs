@@ -1,7 +1,7 @@
 extern crate regex;
 use regex::{escape, Regex};
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
-use base::{Grammar};
+use grammar::Grammar;
 
 #[cfg(test)]
 mod tests {
@@ -345,6 +345,28 @@ impl Expression {
             _ => false,
         }
     }
+    pub(crate) fn weight(&self) -> usize {
+        match self {
+            Expression::Char(_,_) => 1,
+            Expression::Alternation(v,_) | Expression::Sequence(v,_) => {
+                let mut sum = 0;
+                for e in v {
+                    sum += e.weight();
+                }
+                sum
+            },
+            Expression::Part(s,_) => s.len() * 2,
+            Expression::Grammar(ref g,_) => {
+                let mut sum = 0;
+                for e in g.sequence.iter() {
+                    sum += e.weight();
+                }
+                sum
+            },
+            Expression::Repetition(x,n,_) => x.weight() * n,
+            Expression::Raw(s) => s.len(),
+        }
+    }
 }
 
 impl PartialOrd for Expression {
@@ -355,6 +377,10 @@ impl PartialOrd for Expression {
 
 impl Ord for Expression {
     fn cmp(&self, other: &Expression) -> Ordering {
+        let o = self.weight().cmp(&other.weight());
+        if o != Ordering::Equal {
+            return o
+        }
         match self {
             &Expression::Char(c1, b1) => match other {
                 &Expression::Char(c2, b2) => match c1.cmp(&c2) {
@@ -362,12 +388,7 @@ impl Ord for Expression {
                     Ordering::Greater => Ordering::Greater,
                     Ordering::Equal => b1.cmp(&b2),
                 },
-                Expression::Repetition(_, _, _) => Ordering::Less,
-                Expression::Sequence(_, _) => Ordering::Less,
-                Expression::Alternation(_, _) => Ordering::Less,
-                Expression::Part(_, _) => Ordering::Less,
-                Expression::Grammar(_, _) => Ordering::Less,
-                Expression::Raw(_) => Ordering::Less,
+                _ => Ordering::Less,
             },
             Expression::Repetition(e1, c1, b1) => match other {
                 Expression::Char(_, _) => Ordering::Greater,
@@ -381,16 +402,11 @@ impl Ord for Expression {
                         return o;
                     }
                     b1.cmp(&b2)
-                }
-                Expression::Sequence(_, _) => Ordering::Less,
-                Expression::Alternation(_, _) => Ordering::Less,
-                Expression::Part(_, _) => Ordering::Less,
-                Expression::Grammar(_, _) => Ordering::Less,
-                Expression::Raw(_) => Ordering::Less,
+                },
+                _ => Ordering::Less,
             },
             Expression::Sequence(v1, b1) => match other {
-                Expression::Char(_, _) => Ordering::Greater,
-                Expression::Repetition(_, _, _) => Ordering::Greater,
+                Expression::Char(_, _) | Expression::Repetition(_, _, _)=> Ordering::Greater,
                 Expression::Sequence(v2, b2) => {
                     let o = v1.len().cmp(&v2.len());
                     if o != Ordering::Equal {
@@ -405,16 +421,11 @@ impl Ord for Expression {
                         }
                     }
                     b1.cmp(&b2)
-                }
-                Expression::Alternation(_, _) => Ordering::Less,
-                Expression::Part(_, _) => Ordering::Less,
-                Expression::Grammar(_, _) => Ordering::Less,
-                Expression::Raw(_) => Ordering::Less,
+                },
+                _  => Ordering::Less,
             },
             Expression::Alternation(v1, b1) => match other {
-                Expression::Char(_, _) => Ordering::Greater,
-                Expression::Repetition(_, _, _) => Ordering::Greater,
-                Expression::Sequence(_, _) => Ordering::Greater,
+                Expression::Char(_, _) | Expression::Repetition(_, _, _) | Expression::Sequence(_, _)=> Ordering::Greater,
                 Expression::Alternation(v2, b2) => {
                     for (i, e1) in v1.iter().enumerate() {
                         if i == v2.len() {
@@ -433,45 +444,30 @@ impl Ord for Expression {
                     } else {
                         b1.cmp(&b2)
                     }
-                }
-                Expression::Part(_, _) => Ordering::Less,
-                Expression::Grammar(_, _) => Ordering::Less,
-                Expression::Raw(_) => Ordering::Less,
+                },
+                _ => Ordering::Less,
             },
             Expression::Part(s1, b1) => match other {
-                Expression::Char(_, _) => Ordering::Greater,
-                Expression::Repetition(_, _, _) => Ordering::Greater,
-                Expression::Sequence(_, _) => Ordering::Greater,
-                Expression::Alternation(_, _) => Ordering::Greater,
+                Expression::Grammar(_, _) | Expression::Raw(_) => Ordering::Less,
                 Expression::Part(s2, b2) => match s1.cmp(s2) {
                     Ordering::Less => Ordering::Less,
                     Ordering::Greater => Ordering::Greater,
                     Ordering::Equal => b1.cmp(&b2),
                 },
-                Expression::Grammar(_, _) => Ordering::Less,
-                Expression::Raw(_) => Ordering::Less,
+                _ => Ordering::Greater,
             },
             Expression::Grammar(g1, b1) => match other {
-                Expression::Char(_, _) => Ordering::Greater,
-                Expression::Repetition(_, _, _) => Ordering::Greater,
-                Expression::Sequence(_, _) => Ordering::Greater,
-                Expression::Alternation(_, _) => Ordering::Greater,
-                Expression::Part(_, _) => Ordering::Greater,
+                Expression::Raw(_) => Ordering::Less,
                 Expression::Grammar(g2, b2) => match g1.cmp(g2) {
                     Ordering::Less => Ordering::Less,
                     Ordering::Greater => Ordering::Greater,
                     Ordering::Equal => b1.cmp(&b2),
                 },
-                Expression::Raw(_) => Ordering::Less,
+                _ => Ordering::Greater,
             },
             Expression::Raw(s1) => match other {
-                Expression::Char(_, _) => Ordering::Greater,
-                Expression::Repetition(_, _, _) => Ordering::Greater,
-                Expression::Sequence(_, _) => Ordering::Greater,
-                Expression::Alternation(_, _) => Ordering::Greater,
-                Expression::Part(_, _) => Ordering::Greater,
-                Expression::Grammar(_, _) => Ordering::Greater,
                 Expression::Raw(s2) => s1.cmp(s2),
+                _ => Ordering::Greater,
             },
         }
     }
