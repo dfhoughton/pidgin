@@ -193,7 +193,7 @@ all phone numbers but you don't want to provide all phone numbers as patterns,
 say. To work around this you can supply a "foreign rule". This is just a regular
 expression you have acquired outside of pidgin.
 ```rust
-pidgin.foreign_rule("local_us_phone", "\d{3}-?\d{4}").unwrap();
+pidgin.foreign_rule("local_us_phone", r"\d{3}-?\d{4}").unwrap();
 ```
 The `unwrap` is necessary in this case because your expression might not
 compile, so `foreign_rule` returns a `Result<(),regex::Error>` so you can
