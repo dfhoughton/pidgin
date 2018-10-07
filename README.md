@@ -19,6 +19,11 @@ problematic. The `foo` rule uses both `bar` and `baz` twice.
 
 Pidgin allows you to work around this restriction by managing group renaming.
 
+Another disadvantage of regular expressions is that the more expressive they
+are the more difficult they are to read. Pidgin allows you to construct
+expressive regular expressions programmatically such that the intention of
+the pattern doesn't become obscured.
+
 ## Example
 
 ```rust
