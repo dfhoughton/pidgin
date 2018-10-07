@@ -1,3 +1,5 @@
+#![feature(test)]
+extern crate lazy_static;
 extern crate pidgin;
 use pidgin::{Grammar, Pidgin};
 extern crate regex;
@@ -125,7 +127,7 @@ fn complex_repeat() {
 fn simple_string_symbol_capturing() {
     let words = vec!["foo"];
     let mut p = Pidgin::new();
-    p.rule("foo", &Pidgin::grammar(&["bar"]));
+    p.rule("foo", &Pidgin::new().grammar(&["bar"]));
     p.add(&words);
     let pattern = p.compile();
     assert_eq!("(?P<foo>bar)", pattern.to_string());
@@ -155,8 +157,8 @@ fn simple_rx_symbol_non_capturing() {
 fn string_string_symbol_ordering() {
     let words = vec!["foo f"];
     let mut p = Pidgin::new();
-    p.rule("foo", &Pidgin::grammar(&["bar"]));
-    p.rule("f", &Pidgin::grammar(&["plugh"]));
+    p.rule("foo", &Pidgin::new().grammar(&["bar"]));
+    p.rule("f", &Pidgin::new().grammar(&["plugh"]));
     p.add(&words);
     let pattern = p.compile();
     assert_eq!("(?P<foo>bar) (?P<f>plugh)", pattern.to_string());
@@ -167,7 +169,7 @@ fn string_regex_symbol_ordering() {
     let words = vec!["foo f"];
     let mut p = Pidgin::new();
     p.rx_rule("foo", "bar", None).unwrap();
-    p.rule("f", &Pidgin::grammar(&["plugh"]));
+    p.rule("f", &Pidgin::new().grammar(&["plugh"]));
     p.add(&words);
     let pattern = p.compile();
     assert_eq!("(?P<f>plugh)oo (?P<f>plugh)", pattern.to_string());
@@ -187,7 +189,7 @@ fn regex_regex_symbol_ordering() {
 #[test]
 fn normalize_whitespace() {
     let words = vec!["foo bar", "baz   plugh"];
-    let mut p = Pidgin::new().normalize_whitespace();
+    let mut p = Pidgin::new().normalize_whitespace(true);
     p.add(&words);
     let pattern = p.compile().to_string();
     let rx = Regex::new(&pattern).unwrap();
@@ -328,7 +330,7 @@ fn case_sensitivity() {
 fn nested_capturing() {
     let mut p = Pidgin::new()
         .word_bound()
-        .normalize_whitespace()
+        .normalize_whitespace(true)
         .case_insensitive(true);
     let apples = p.add(&vec!["pippin", "northern spy", "crab"]).compile();
     let oranges = p.add(&vec!["blood", "navel", "valencia"]).compile();

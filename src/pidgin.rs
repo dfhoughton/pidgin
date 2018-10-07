@@ -47,6 +47,10 @@ impl Pidgin {
             flags: self.flags.clone(),
         }
     }
+    pub fn grammar(&mut self, words: &[&str]) -> Grammar {
+        self.add(words);
+        self.compile()
+    }
     pub fn rule(&mut self, name: &str, g: &Grammar) {
         let mut g = g.clone();
         g.name = Some(name.to_string());
@@ -99,6 +103,12 @@ impl Pidgin {
             }
         }
     }
+    pub fn remove_rule(&mut self, name: &str) {
+        self.symbols.remove(&Symbol::S(name.to_string()));
+    }
+    pub fn remove_rx_rule(&mut self, name: &str) {
+        self.symbols.remove(&Symbol::Rx(Regex::new(name).unwrap()));
+    }
     pub fn clear(&mut self) {
         self.symbols.clear();
         self.phrases.clear();
@@ -123,8 +133,13 @@ impl Pidgin {
         self.flags.enclosed = case;
         self
     }
-    pub fn normalize_whitespace(mut self) -> Pidgin {
-        self.rx_rule(r"\s+", r"\s+", None).unwrap();
+    pub fn normalize_whitespace(mut self, required: bool) -> Pidgin {
+        self.remove_rx_rule(r"\s+");
+        if required {
+            self.rx_rule(r"\s+", r"\s+", None).unwrap();
+        } else {
+            self.rx_rule(r"\s+", r"\s*", None).unwrap();
+        }
         self
     }
     pub fn unbound(mut self) -> Pidgin {
@@ -183,13 +198,8 @@ impl Pidgin {
             flags: g.flags.clone(),
         }
     }
-    pub fn grammar(words: &[&str]) -> Grammar {
-        let mut p = Pidgin::new();
-        p.add(words);
-        p.compile()
-    }
     pub fn rx(words: &[&str]) -> String {
-        Pidgin::grammar(words).to_string()
+        Pidgin::new().grammar(words).to_string()
     }
     pub fn matcher(&self) -> Result<Matcher, Error> {
         self.clone().compile().matcher()
