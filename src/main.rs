@@ -7,9 +7,5 @@ use regex::Regex;
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
-    // assert!(matcher.parse(""));
-    // println!("{:?}", date.matcher().unwrap());
-    // let rx = Regex::new(&p.compile()).unwrap();
-    // p.add(&args.iter().map(String::as_str).collect::<Vec<&str>>());
-    // println!("{}", p.compile());
+    println!("{}", Pidgin::rx(&args.iter().map(String::as_ref).collect::<Vec<&str>>()));
 }

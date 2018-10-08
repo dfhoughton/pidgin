@@ -291,15 +291,18 @@ impl Pidgin {
         self.flags.multi_line = true;
         self
     }
+    /// The rule should match the entire string.
     pub fn string_bound(mut self) -> Pidgin {
         self.left = Some(Boundary::String);
         self.right = Some(Boundary::String);
         self
     }
+    /// The left margin of every alternate should be the beginning of the line.
     pub fn left_string_bound(mut self) -> Pidgin {
         self.left = Some(Boundary::String);
         self
     }
+    /// The right margin of every alternate should be the beginning of the line.
     pub fn right_string_bound(mut self) -> Pidgin {
         self.right = Some(Boundary::String);
         self
@@ -310,6 +313,7 @@ impl Pidgin {
         self.right = None;
         self
     }
+    // Compiles the rule to a grammar with no capturing groups.
     pub fn compile_non_capturing(&self) -> Grammar {
         let g = self.clone().compile().clear_recursive();
         let sequence = self.recursive_condense_sequence(&g.sequence);
@@ -319,9 +323,14 @@ impl Pidgin {
             flags: g.flags.clone(),
         }
     }
+    /// Convenience method for generating non-backtracking regular expressions.
+    /// ```rust
+    /// Pidgin::rx(&vec!["cat", "camel", "aaaabbbbaaaabbbb"]); // (?:ca(?:t|mel)|(?:a{4}b{4}){2})
+    /// ```
     pub fn rx(words: &[&str]) -> String {
         Pidgin::new().grammar(words).to_string()
     }
+    /// Convenience method equivalent to `compile().matcher()`
     pub fn matcher(&self) -> Result<Matcher, Error> {
         self.clone().compile().matcher()
     }
