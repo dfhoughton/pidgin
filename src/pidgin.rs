@@ -6,6 +6,36 @@ use std::cmp::{Ord, Ordering};
 use std::collections::{BTreeMap, BTreeSet};
 use util::{character_class_escape, is_atomic, Boundary, CharRange, Expression, Flags, Symbol};
 
+/// This is a grammar builder. It keeps track of the rules defined, the
+/// alternates participating in the rule currently being defined, whether these
+/// alternates should be bounded left and right by word boundaries, string
+/// boundaries, or line boundaries, and the set of regex flags -- case-sensitivity,
+/// for instance, that will govern the rule it produces.
+///
+/// Defined rules will be used to process the new rule's alternates. If there is
+/// a "foo" rule, the alternate `"foo foo"` will be understood to require that
+/// this "foo" rule match twice with a space between matches.
+///
+/// Because rule names can overlap, they are applied longest to shortest. If there
+/// is both a "foo" rule and a "f" rule, "f foo" will be understood to involve
+/// one match for each -- the "f" rule only gets the single "f".
+///
+/// In addition to rules identified like this by a name, there are also regex
+/// rules. These are substituted into alternates wherever their definitional
+/// pattern matches. Regex rules are sought in alternates only in what is left
+/// over after ordinary rules are found. Regex rules are applied in inverse
+/// order by the length of their string representation and then in alphabetical
+/// order. They may optionally also have names.
+///
+/// `Pidgin` has numerous configuration methods which consume and return their
+/// invocant.
+/// ```rust
+/// let mut p = Pidgin::new()
+///    .enclosed(true)
+///    .word_bound()
+///    .case_insensitive(true);
+/// ```
+
 #[derive(Clone, Debug)]
 pub struct Pidgin {
     flags: Flags,
@@ -16,6 +46,9 @@ pub struct Pidgin {
 }
 
 impl Pidgin {
+    /// Constructs a new `Pidgin` with the default state: no rules, no alternates
+    /// for the current rule, case-sensitive, not multiline, not dot-all (`.`
+    /// matches a newline), unicode-compliant, and not enclosed.
     pub fn new() -> Pidgin {
         Pidgin {
             flags: Flags::defaults(),
@@ -25,16 +58,24 @@ impl Pidgin {
             phrases: Vec::new(),
         }
     }
+    /// Adds the given list of alternates to the rule currently under construction.
+    ///
+    /// This method is chainable.
     pub fn add(&mut self, phrases: &[&str]) -> &mut Pidgin {
         for w in phrases {
             self.phrases.push(w.to_string());
         }
         self
     }
+    /// Adds the given alternate to the rule currently under construction.
+    ///
+    /// This method is chainable.
     pub fn add_str(&mut self, s: &str) -> &mut Pidgin {
         self.phrases.push(s.to_string());
         self
     }
+    /// Compiles the current rule, clearing the alternate list in preparation
+    /// for constructing the next rule.
     pub fn compile(&mut self) -> Grammar {
         let mut phrases = self.init();
         phrases.sort();
@@ -47,21 +88,39 @@ impl Pidgin {
             flags: self.flags.clone(),
         }
     }
+    /// A convenience method equivalent to `add(&words).compile()`.
     pub fn grammar(&mut self, words: &[&str]) -> Grammar {
         self.add(words);
         self.compile()
     }
+    /// Define the rule `name`.
+    ///
+    /// ***NOTE*** Multiple rules defined with the same name are treated as
+    /// alternates. The order of their adding will define the order in which
+    /// they are tried. See `remove_rule`.
     pub fn rule(&mut self, name: &str, g: &Grammar) {
         let mut g = g.clone();
         g.name = Some(name.to_string());
         self.add_symbol(Symbol::S(name.to_string()), Expression::Grammar(g, false));
     }
+    /// Defines a rule, optionally named, replacing matched portion's of the
+    /// rule's alternates with the given regex.
+    ///
+    /// The `rx` argument finds matched portions of an alternate. The `pattern`
+    /// argument defines the regular expression of the rule. The `name` argument
+    /// provides the optional name for the rule.
+    ///
+    /// ```rust
+    /// pidgin.rx_rule(r"\s+", r"\t+", Some("whitespace_means_tabs")).unwrap();
+    /// ```
+    ///
+    /// `rx_rule` returns an error if either `rx` or `pattern` fails to compile.
     pub fn rx_rule(
         &mut self,
         rx: &str,
         pattern: &str,
         name: Option<&str>,
-    ) -> Result<&mut Pidgin, Error> {
+    ) -> Result<(), Error> {
         match Regex::new(rx) {
             Ok(rx) => {
                 let name = match name {
@@ -77,11 +136,19 @@ impl Pidgin {
                     flags,
                 };
                 self.add_symbol(Symbol::Rx(rx), Expression::Grammar(g, false));
-                Ok(self)
+                Ok(())
             }
             Err(e) => Err(e),
         }
     }
+    /// Defines a rule based on an ad hoc regular expression.
+    ///
+    /// Currently `foreign_rule` is the only way to define a rule with unbounded
+    /// repetition.
+    /// ```rust
+    /// pidgin.foreign_rule("word", r"\b\w+\b").unwrap();
+    /// ```
+    /// `foreign_rule` returns an error if the foreign regex fails to compile.
     pub fn foreign_rule(&mut self, name: &str, pattern: &str) -> Result<(), Error> {
         match Regex::new(pattern) {
             Err(e) => Err(e),
@@ -103,38 +170,75 @@ impl Pidgin {
             }
         }
     }
+    /// Removes a rule from the list known to the `Pidgin`.
     pub fn remove_rule(&mut self, name: &str) {
         self.symbols.remove(&Symbol::S(name.to_string()));
     }
-    pub fn remove_rx_rule(&mut self, name: &str) {
-        self.symbols.remove(&Symbol::Rx(Regex::new(name).unwrap()));
+    /// Like `remove_rule` but the rule identifier is a regex rather than a
+    /// rule name.
+    pub fn remove_rx_rule(&mut self, name: &str) -> Result<(),Error> {
+        match Regex::new(name) {
+            Err(e) => Err(e),
+            Ok(rx) => {
+                self.symbols.remove(&Symbol::Rx(rx));
+                Ok(())
+            }
+        }
     }
+    /// Removes all alternates and rule definitions from the `Pidgin`. Flags
+    /// controlling case sensitivity and such remain.
     pub fn clear(&mut self) {
         self.symbols.clear();
         self.phrases.clear();
     }
+    /// Toggles whether `Pidgin` creates case-insensitive rules.
+    ///
+    /// By default this is false.
     pub fn case_insensitive(mut self, case: bool) -> Pidgin {
         self.flags.case_insensitive = case;
         self
     }
+    /// Toggles whether `Pidgin` creates multi-line rules. This governs the
+    /// behavior of `^` and `$` anchors, whether they match string boundaries
+    /// or after and before newline characters.
+    ///
+    /// By default this is false.
     pub fn multi_line(mut self, case: bool) -> Pidgin {
         self.flags.multi_line = case;
         self
     }
+    /// Toggles whether `Pidgin` creates rules wherein `.` can match newline
+    /// characters. This is the so-called "single line" mode of Perl-compatible
+    /// regular expressions.
+    ///
+    /// By default this is false.
     pub fn dot_all(mut self, case: bool) -> Pidgin {
         self.flags.dot_all = case;
         self
     }
+    /// Toggles whether `Pidgin` creates Unicode-compliant rules.
+    ///
+    /// By default this is true.
     pub fn unicode(mut self, case: bool) -> Pidgin {
         self.flags.unicode = case;
         self
     }
+    /// Toggles whether `Pidgin` creates rules that can safely be modified by
+    /// a repetition expression. `(?:ab)` is enclosed. `ab` is not.
+    ///
+    /// This parameter is generally of interest only when using `Pidgin` to
+    /// create elements of other regular expressions.
+    ///
+    /// By default this is false.
     pub fn enclosed(mut self, case: bool) -> Pidgin {
         self.flags.enclosed = case;
         self
     }
+    /// Treat any white space found in an alternate as "some amount of white space".
+    /// if the `required` parameter is `true`, it means "at least some white
+    /// space". If it is false, it means "maybe some white space".
     pub fn normalize_whitespace(mut self, required: bool) -> Pidgin {
-        self.remove_rx_rule(r"\s+");
+        self.remove_rx_rule(r"\s+").unwrap();
         if required {
             self.rx_rule(r"\s+", r"\s+", None).unwrap();
         } else {
@@ -142,35 +246,46 @@ impl Pidgin {
         }
         self
     }
-    pub fn unbound(mut self) -> Pidgin {
-        self.left = None;
-        self.right = None;
-        self
-    }
+    /// The left and right edges of all alternates, when applicable, should be
+    /// word boundaries -- `\b`. If the alternate has a non-word character at the
+    /// boundary in question, such as "@" or "(", then it is left alone, but if
+    /// it is a word character, it should be bounded by a `\b` in the regular
+    /// expression generated.
     pub fn word_bound(mut self) -> Pidgin {
         self.left = Some(Boundary::Word);
         self.right = Some(Boundary::Word);
         self
     }
+    /// Alternates should have word boundaries, where applicable, on the left margin.
     pub fn left_word_bound(mut self) -> Pidgin {
         self.left = Some(Boundary::Word);
         self
     }
+    /// Alternates should have word boundaries, where applicable, on the right margin.
     pub fn right_word_bound(mut self) -> Pidgin {
         self.right = Some(Boundary::Word);
         self
     }
+    /// Alternates should match entire lines.
+    ///
+    /// ***NOTE*** This turns multi-line matching on for the rule.
     pub fn line_bound(mut self) -> Pidgin {
         self.left = Some(Boundary::Line);
         self.right = Some(Boundary::Line);
         self.flags.multi_line = true;
         self
     }
+    /// Alternates should match at the beginning of the line on their left margin.
+    ///
+    /// ***NOTE*** This turns multi-line matching on for the rule.
     pub fn left_line_bound(mut self) -> Pidgin {
         self.left = Some(Boundary::Line);
         self.flags.multi_line = true;
         self
     }
+    /// Alternates should match at the beginning of the line on their right margin.
+    ///
+    /// ***NOTE*** This turns multi-line matching on for the rule.
     pub fn right_line_bound(mut self) -> Pidgin {
         self.right = Some(Boundary::Line);
         self.flags.multi_line = true;
@@ -187,6 +302,12 @@ impl Pidgin {
     }
     pub fn right_string_bound(mut self) -> Pidgin {
         self.right = Some(Boundary::String);
+        self
+    }
+    /// Clears any expectation that alternates have boundary anchors.
+    pub fn unbound(mut self) -> Pidgin {
+        self.left = None;
+        self.right = None;
         self
     }
     pub fn compile_non_capturing(&self) -> Grammar {

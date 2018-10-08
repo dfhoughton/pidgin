@@ -353,12 +353,12 @@ fn nested_capturing() {
         .unwrap();
     assert!(matcher.is_match("cherry"));
     let captures = matcher.parse("cherry").unwrap();
-    assert_eq!(captures.name("vegetable").unwrap().value(), "cherry");
-    assert_eq!(captures.name("tomatoe").unwrap().value(), "cherry");
+    assert_eq!(captures.name("vegetable").unwrap().as_str(), "cherry");
+    assert_eq!(captures.name("tomatoe").unwrap().as_str(), "cherry");
     assert!(matcher.is_match("Brandywine"));
     let captures = matcher.parse("  Northern  Spy  ").unwrap();
-    assert_eq!(captures.name("fruit").unwrap().value(), "Northern  Spy");
-    assert_eq!(captures.name("apple").unwrap().value(), "Northern  Spy");
+    assert_eq!(captures.name("fruit").unwrap().as_str(), "Northern  Spy");
+    assert_eq!(captures.name("apple").unwrap().as_str(), "Northern  Spy");
     assert!(!matcher.is_match("tomatoes"));
 }
 

@@ -139,7 +139,7 @@ assert!(!matcher.is_match("jejune 6, 1969"));
 // we can inspect the parse tree
 let m = matcher.parse("2018/10/6").unwrap();
 assert!(m.name("numeric_date").is_some());
-assert_eq!(m.name("year").unwrap().value(), "2018");
+assert_eq!(m.name("year").unwrap().as_str(), "2018");
 let m = matcher.parse("Friday").unwrap();
 assert!(!m.name("numeric_date").is_some());
 assert!(m.name("weekday").is_some());

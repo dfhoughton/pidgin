@@ -4,15 +4,24 @@ use regex::{Captures, Error, Regex};
 use std::collections::HashMap;
 use util::{Expression, Flags};
 
+/// This is functionally equivalent to a `Regex`: you can use it repeatedly to
+/// search a string. It cannot itself be used directly to split strings, but
+/// its regular expression is public and may be so used. It improves on regular
+/// expressions in that the `Match` object it returns is the root node in a
+/// parse tree, so its matches preserve parse structure.
 #[derive(Debug)]
 pub struct Matcher {
-    rx: Regex,
+    /// The `Regex` used for parsing.
+    pub rx: Regex,
     root: String,
     translation: HashMap<String, String>,
     parentage: HashMap<String, Vec<String>>,
 }
 
 impl Matcher {
+    /// Returns `Some(Match)` if the grammar can parse the string. Note that
+    /// unless the grammar is string-bounded, this only means it can parse
+    /// the string at some point.
     pub fn parse<'t>(&self, s: &'t str) -> Option<Match<'t>> {
         match self.rx.captures(s) {
             Some(captures) => {
@@ -30,6 +39,8 @@ impl Matcher {
             None => None,
         }
     }
+    /// Returns whether the grammar can parse the string. This is a cheaper
+    /// operation than parsing.
     pub fn is_match(&self, text: &str) -> bool {
         self.rx.is_match(text)
     }
@@ -134,6 +145,13 @@ impl Matcher {
     }
 }
 
+/// This is a node in a parse tree. It is functionally similar to `regex::Match`,
+/// in fact providing much the same API, but unlike a `regex::Match` a `pidgin::Match`
+/// always corresponds to some rule, it knows what rule it corresponds to,
+/// and it records any sub-matches involved in its parsing.
+///
+/// The lifetime parameter `'t` represents the lifetime of the `&str` matched
+/// against.
 #[derive(Debug)]
 pub struct Match<'t> {
     rule: String,
@@ -144,25 +162,31 @@ pub struct Match<'t> {
 }
 
 impl<'t> Match<'t> {
-    pub fn value(&self) -> &'t str {
+    /// Returns the matched text.
+    pub fn as_str(&self) -> &'t str {
         &self.text[self.start..self.end]
     }
+    /// Returns the starting offset of the match.
     pub fn start(&self) -> usize {
         self.start
     }
+    /// Returns the ending offset of the match.
     pub fn end(&self) -> usize {
         self.end
     }
+    /// Returns the grammar rule matched.
     pub fn rule(&self) -> &str {
         &self.rule
     }
+    /// Returns the sub-matches of this match, if any.
     pub fn children(&self) -> Option<&[Match<'t>]> {
         match self.children.as_ref() {
             Some(v) => Some(v),
             None => None,
         }
     }
-    // recursive search for the value of any named pattern by this name that matched
+    /// Returns the first `Match` defined by the given rule under this parse
+    /// node searching recursively, depth-first, left-to-right.
     pub fn name(&self, name: &str) -> Option<&Match> {
         if self.rule == name {
             Some(self)
@@ -177,7 +201,9 @@ impl<'t> Match<'t> {
             None
         }
     }
-    // collect all the times this rule matched
+    /// Returns all `Match`es matching the given rule in the parse tree under
+    /// this node. Matches are ordered as found by a depth-first left-to-right
+    /// search of the parse tree.
     pub fn all_names(&self, name: &str) -> Vec<&Match> {
         let mut v = Vec::new();
         self.collect(name, &mut v);

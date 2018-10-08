@@ -1,5 +1,31 @@
 /*!
 
+This crate provides a library for generating efficient regular expressions
+programmatically that can represent a simple, non-recursive grammar. It uses
+the [`regex`](https://crates.io/crates/regex) crate for its parsing engine.
+
+# Usage
+
+This crate is [on crates.io](https://crates.io/crates/pidgin) and can be
+used by adding `pidgin` to your dependencies in your project's `Cargo.toml`.
+
+```toml
+[dependencies]
+pidgin = "0.1"
+```
+
+and this to your crate root:
+
+```rust
+extern crate pidgin;
+```
+
+# Example: find a date
+
+This is like the `regex` example, but considerably more expressive, and once
+you've matched a date with a `Pidgin` matcher it is easier to determine *how*
+you matched it and thus convert the match into useful semantics.
+
 ```rust
 use pidgin::Pidgin;
 
@@ -113,7 +139,7 @@ assert!(!matcher.is_match("jejune 6, 1969"));
 // we can inspect the parse tree
 let m = matcher.parse("2018/10/6").unwrap();
 assert!(m.name("numeric_date").is_some());
-assert_eq!(m.name("year").unwrap().value(), "2018");
+assert_eq!(m.name("year").unwrap().as_str(), "2018");
 let m = matcher.parse("Friday").unwrap();
 assert!(!m.name("numeric_date").is_some());
 assert!(m.name("weekday").is_some());

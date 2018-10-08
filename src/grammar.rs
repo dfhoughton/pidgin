@@ -3,6 +3,12 @@ use regex::Error;
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use util::{Expression, Flags};
 
+/// A compiled collection of rules ready for the building of a
+/// `pidgin::Matcher` or for use in the definition of a new rule.
+///
+/// You do not build new `Grammar`s directly. Rather, the `compile` or `grammar`
+/// method of a `Pidgin` produces them for you.
+
 #[derive(Clone, Debug)]
 pub struct Grammar {
     pub(crate) name: Option<String>,
@@ -11,10 +17,17 @@ pub struct Grammar {
 }
 
 impl Grammar {
+    /// Compiles a `Matcher` based on the `Grammar`'s rules.
+    ///
+    /// If the `Grammar` contains a "foreign rule" with a named capture, an
+    /// error may be returned.
     pub fn matcher(&self) -> Result<Matcher, Error> {
         Matcher::new(&self)
     }
-    // mostly for debugging -- this is likely not to compile due to repeated names
+    /// Returns a quasi-regex representation of the grammar. This is intended
+    /// mostly for debugging. Rules will be identifiable by named groups, but
+    /// group names may repeat, in which case the stringification cannot be
+    /// compiled into a regular expression.
     pub fn to_string(&self) -> String {
         self.to_s(&Flags::defaults())
     }
