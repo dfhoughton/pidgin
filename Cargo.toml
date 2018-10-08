@@ -2,10 +2,16 @@
 name = "pidgin"
 version = "0.1.0"
 authors = ["dfhoughton <dfhoughton@gmail.com>"]
+description= "simple non-recursive grammars"
+homepage = "https://github.com/dfhoughton/pidgin"
+repository = "https://github.com/dfhoughton/pidgin"
+readme = "README.md"
+keywords = [ "grammar", "regex", "parsing" ]
+categories = [ "parsing", "text-processing" ]
+license = "GPL-2.0"
 
-[[bin]]
-name="pidgin"
-path = "src/main.rs"
+[profile.release]
+panic = "abort"
 
 [dependencies]
 regex = "1"
