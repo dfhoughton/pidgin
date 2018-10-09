@@ -19,6 +19,8 @@ pub struct Grammar {
 impl Grammar {
     /// Compiles a `Matcher` based on the `Grammar`'s rules.
     ///
+    /// # Errors
+    ///
     /// If the `Grammar` contains a "foreign rule" with a named capture, an
     /// error may be returned.
     pub fn matcher(&self) -> Result<Matcher, Error> {

@@ -30,6 +30,7 @@ use util::{character_class_escape, is_atomic, Boundary, CharRange, Expression, F
 /// `Pidgin` has numerous configuration methods which consume and return their
 /// invocant.
 /// ```rust
+/// # use pidgin::Pidgin;
 /// let mut p = Pidgin::new()
 ///    .enclosed(true)
 ///    .word_bound()
@@ -103,51 +104,58 @@ impl Pidgin {
         g.name = Some(name.to_string());
         self.add_symbol(Symbol::S(name.to_string()), Expression::Grammar(g, false));
     }
-    /// Defines a rule, optionally named, replacing matched portion's of the
+    /// Defines a rule replacing matched portion's of the
     /// rule's alternates with the given regex.
     ///
-    /// The `rx` argument finds matched portions of an alternate. The `pattern`
-    /// argument defines the regular expression of the rule. The `name` argument
+    /// The `rx` argument finds matched portions of an alternate. The `g`
+    /// argument defines the rule. The `name` argument
     /// provides the optional name for the rule.
     ///
     /// ```rust
-    /// pidgin.rx_rule(r"\s+", r"\t+", Some("whitespace_means_tabs")).unwrap();
+    /// # use pidgin::Pidgin;
+    /// # use std::error::Error;
+    /// # fn demo() -> Result<(),Box<Error>> {
+    /// # let mut pidgin = Pidgin::new();
+    /// # let g = pidgin.grammar(&vec!["foo","bar"]);
+    /// pidgin.rx_rule(r"\s+", &g, Some("whitespace_is_special"))?;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
-    /// `rx_rule` returns an error if either `rx` or `pattern` fails to compile.
-    pub fn rx_rule(
-        &mut self,
-        rx: &str,
-        pattern: &str,
-        name: Option<&str>,
-    ) -> Result<(), Error> {
+    /// # Errors
+    ///
+    /// `rx_foreign_rule` returns an error if `rx` fails to compile.
+    pub fn rx_rule(&mut self, rx: &str, g: &Grammar, name: Option<&str>) -> Result<(), Error> {
         match Regex::new(rx) {
+            Err(e) => Err(e),
             Ok(rx) => {
-                let name = match name {
-                    Some(n) => Some(n.to_string()),
+                let mut g = g.clone();
+                g.name = match name {
+                    Some(name) => Some(name.to_string()),
                     None => None,
                 };
-                let sequence = vec![Expression::Part(pattern.to_string(), false)];
-                let mut flags = Flags::defaults();
-                flags.enclosed = !is_atomic(pattern);
-                let g = Grammar {
-                    name,
-                    sequence,
-                    flags,
-                };
-                self.add_symbol(Symbol::Rx(rx), Expression::Grammar(g, false));
+                self.add_symbol(Symbol::Rx(rx), Expression::Grammar(g.clone(), false));
                 Ok(())
             }
-            Err(e) => Err(e),
         }
     }
     /// Defines a rule based on an ad hoc regular expression.
     ///
     /// Currently `foreign_rule` is the only way to define a rule with unbounded
     /// repetition.
+    ///
     /// ```rust
-    /// pidgin.foreign_rule("word", r"\b\w+\b").unwrap();
+    /// # use pidgin::Pidgin;
+    /// # use std::error::Error;
+    /// # fn demo() -> Result<(),Box<Error>> {
+    /// # let mut pidgin = Pidgin::new();
+    /// pidgin.foreign_rule("us_local_phone", r"\b[0-9]{3}-?[0-9]{4}\b")?;
+    /// # Ok(())
+    /// # }
     /// ```
+    ///
+    /// # Errors
+    ///
     /// `foreign_rule` returns an error if the foreign regex fails to compile.
     pub fn foreign_rule(&mut self, name: &str, pattern: &str) -> Result<(), Error> {
         match Regex::new(pattern) {
@@ -170,13 +178,62 @@ impl Pidgin {
             }
         }
     }
+    /// Defines a rule, optionally named, replacing matched portion's of the
+    /// rule's alternates with the given regex.
+    ///
+    /// The `rx` argument finds matched portions of an alternate. The `pattern`
+    /// argument defines the regular expression of the rule. The `name` argument
+    /// provides the optional name for the rule.
+    ///
+    /// ```rust
+    /// # use pidgin::Pidgin;
+    /// # use std::error::Error;
+    /// # fn demo() -> Result<(),Box<Error>> {
+    /// # let mut pidgin = Pidgin::new();
+    /// pidgin.rx_foreign_rule(r"\s+", r"\t+", Some("whitespace_means_tabs"))?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// `rx_foreign_rule` returns an error if either `rx` or `pattern` fails to compile.
+    pub fn rx_foreign_rule(
+        &mut self,
+        rx: &str,
+        pattern: &str,
+        name: Option<&str>,
+    ) -> Result<(), Error> {
+        match Regex::new(rx) {
+            Ok(rx) => match Regex::new(pattern) {
+                Err(e) => Err(e),
+                Ok(_) => {
+                    let name = match name {
+                        Some(n) => Some(n.to_string()),
+                        None => None,
+                    };
+                    let sequence = vec![Expression::Part(pattern.to_string(), false)];
+                    let mut flags = Flags::defaults();
+                    flags.enclosed = !is_atomic(pattern);
+                    let g = Grammar {
+                        name,
+                        sequence,
+                        flags,
+                    };
+                    self.add_symbol(Symbol::Rx(rx), Expression::Grammar(g, false));
+                    Ok(())
+                }
+            },
+            Err(e) => Err(e),
+        }
+    }
     /// Removes a rule from the list known to the `Pidgin`.
     pub fn remove_rule(&mut self, name: &str) {
         self.symbols.remove(&Symbol::S(name.to_string()));
     }
     /// Like `remove_rule` but the rule identifier is a regex rather than a
     /// rule name.
-    pub fn remove_rx_rule(&mut self, name: &str) -> Result<(),Error> {
+    pub fn remove_rx_rule(&mut self, name: &str) -> Result<(), Error> {
         match Regex::new(name) {
             Err(e) => Err(e),
             Ok(rx) => {
@@ -240,9 +297,9 @@ impl Pidgin {
     pub fn normalize_whitespace(mut self, required: bool) -> Pidgin {
         self.remove_rx_rule(r"\s+").unwrap();
         if required {
-            self.rx_rule(r"\s+", r"\s+", None).unwrap();
+            self.rx_foreign_rule(r"\s+", r"\s+", None).unwrap();
         } else {
-            self.rx_rule(r"\s+", r"\s*", None).unwrap();
+            self.rx_foreign_rule(r"\s+", r"\s*", None).unwrap();
         }
         self
     }
@@ -325,12 +382,17 @@ impl Pidgin {
     }
     /// Convenience method for generating non-backtracking regular expressions.
     /// ```rust
+    /// # use pidgin::Pidgin;
     /// Pidgin::rx(&vec!["cat", "camel", "aaaabbbbaaaabbbb"]); // (?:ca(?:t|mel)|(?:a{4}b{4}){2})
     /// ```
     pub fn rx(words: &[&str]) -> String {
         Pidgin::new().grammar(words).to_string()
     }
     /// Convenience method equivalent to `compile().matcher()`
+    ///
+    /// # Errors
+    ///
+    /// `matcher` throws errors where `Grammar#matcher` throws errors.
     pub fn matcher(&self) -> Result<Matcher, Error> {
         self.clone().compile().matcher()
     }

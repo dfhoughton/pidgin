@@ -1,10 +1,11 @@
 [package]
 name = "pidgin"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["dfhoughton <dfhoughton@gmail.com>"]
 description= "simple non-recursive grammars"
 homepage = "https://github.com/dfhoughton/pidgin"
 repository = "https://github.com/dfhoughton/pidgin"
+documentation = "https://docs.rs/pidgin"
 readme = "README.md"
 keywords = [ "grammar", "regex", "parsing" ]
 categories = [ "parsing", "text-processing" ]
