@@ -1,6 +1,7 @@
 use matching::Matcher;
 use regex::Error;
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use util::{Expression, Flags};
 
 /// A compiled collection of rules ready for the building of a
@@ -26,12 +27,120 @@ impl Grammar {
     pub fn matcher(&self) -> Result<Matcher, Error> {
         Matcher::new(&self)
     }
+    pub fn describe(&self) -> String {
+        let g = self.describable_grammar();
+        let mut rules = vec![(String::from("TOP"), g._describe())];
+        let mut seen: BTreeSet<String> = BTreeSet::new();
+        let mut queue = VecDeque::new();
+        for r in self.rules() {
+            let og = g.find(&r).unwrap().describable_grammar();
+            queue.push_back((r, og));
+        }
+        loop {
+            if let Some((r, g)) = queue.pop_front() {
+                if !seen.contains(&r) {
+                    rules.push((r.clone(), g._describe()));
+                    seen.insert(r);
+                    for r in g.rules() {
+                        let og = g.find(&r).unwrap().describable_grammar();
+                        queue.push_back((r, og));
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+        let mut max = 3;
+        for (ref n, _) in &rules {
+            let l = n.len();
+            if l > max {
+                max = l;
+            }
+        }
+        let mut s = String::new();
+        for (n, d) in rules {
+            s = s + &format!("{: >width$} := {}", n, d, width = max) + "\n";
+        }
+        s
+    }
+    fn describable_grammar(&self) -> Grammar {
+        let mut g = self.clone();
+        g.name = None;
+        g.flags.enclosed = false;
+        g
+    }
+    fn _describe(&self) -> String {
+        self.sequence
+            .iter()
+            .map(|e| e.to_s(&self.flags, true))
+            .collect::<Vec<_>>()
+            .join("")
+    }
+    fn rules(&self) -> Vec<String> {
+        let mut rules = Vec::new();
+        let mut expressions = VecDeque::new();
+        for e in &self.sequence {
+            expressions.push_back(e);
+        }
+        loop {
+            if let Some(e) = expressions.pop_front() {
+                match e {
+                    Expression::Grammar(ref g, _) => {
+                        if let Some(ref n) = g.name {
+                            rules.push(n.to_string());
+                        }
+                    }
+                    Expression::Alternation(v, _) | Expression::Sequence(v, _) => {
+                        for e in v {
+                            expressions.push_back(e);
+                        }
+                    }
+                    Expression::Repetition(e, _, _) => expressions.push_back(e),
+                    _ => (),
+                }
+            } else {
+                break;
+            }
+        }
+        rules
+    }
+    fn find(&self, name: &str) -> Option<Grammar> {
+        let mut expressions = VecDeque::new();
+        for e in &self.sequence {
+            expressions.push_back(e);
+        }
+        loop {
+            if let Some(e) = expressions.pop_front() {
+                match e {
+                    Expression::Grammar(ref g, _) => {
+                        if let Some(ref n) = g.name {
+                            if n == name {
+                                let mut g = g.clone();
+                                g.name = None;
+                                return Some(g);
+                            }
+                        }
+                    }
+                    Expression::Alternation(v, _) | Expression::Sequence(v, _) => {
+                        for e in v {
+                            expressions.push_back(e);
+                        }
+                    }
+                    Expression::Repetition(e, _, _) => expressions.push_back(e),
+                    _ => (),
+                }
+            } else {
+                break;
+            }
+        }
+        None
+    }
     /// Returns a quasi-regex representation of the grammar. This is intended
     /// mostly for debugging. Rules will be identifiable by named groups, but
     /// group names may repeat, in which case the stringification cannot be
     /// compiled into a regular expression.
     pub fn to_string(&self) -> String {
-        self.to_s(&Flags::defaults())
+        self.to_s(&Flags::defaults(), false)
     }
     pub(crate) fn clear_recursive(&self) -> Grammar {
         let sequence = self.sequence.iter().map(|e| e.clear_names()).collect();
@@ -98,7 +207,7 @@ impl Grammar {
         }
         flags
     }
-    pub(crate) fn to_s(&self, context: &Flags) -> String {
+    pub(crate) fn to_s(&self, context: &Flags, describing: bool) -> String {
         let mut s = if self.name.is_some() {
             format!("(?P<{}>", self.name.as_ref().unwrap())
         } else {
@@ -108,7 +217,7 @@ impl Grammar {
             s = s + format!("(?{}:", self.flags(context)).as_str();
         }
         for e in &self.sequence {
-            s += e.to_s(&self.flags).as_ref();
+            s += e.to_s(&self.flags, describing).as_ref();
         }
         if self.needs_closure(context) {
             s = s + ")"

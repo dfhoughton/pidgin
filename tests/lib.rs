@@ -392,3 +392,17 @@ fn foreign_rule() -> Result<(), Box<std::error::Error>> {
     assert!(m.is_match("thisfooisbarweird"));
     Ok(())
 }
+
+#[test]
+fn description() {
+    let mut p = Pidgin::new();
+    let g = p.grammar(&vec!["bar", "baz"]);
+    p.rule("foo", &g);
+    let g = p.grammar(&vec!["ping", "pang", "pong"]);
+    p.rule("xyzzy", &g);
+    let g = p.grammar(&vec!["xyzzy", "qux"]);
+    p.rule("plugh", &g);
+    let g = p.grammar(&vec!["foo", "plugh"]);
+    println!("{}", g.describe());
+    assert_eq!("", g.describe());
+}

@@ -81,7 +81,7 @@ impl Matcher {
             true,
         );
         if let Expression::Grammar(g, _) = g {
-            match Regex::new(&g.to_s(&Flags::defaults())) {
+            match Regex::new(&g.to_s(&Flags::defaults(), false)) {
                 Ok(rx) => Ok(Matcher {
                     translation,
                     parentage,

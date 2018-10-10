@@ -277,27 +277,27 @@ impl Expression {
             Expression::Raw(_) => false,
         }
     }
-    pub(crate) fn to_s(&self, context: &Flags) -> String {
+    pub(crate) fn to_s(&self, context: &Flags, describing: bool) -> String {
         // String::new()
         let s = match self {
             Expression::Char(c, _) => escape(&c.to_string()),
             Expression::Alternation(v, _) => {
                 if v.len() == 1 {
-                    v[0].to_s(context)
+                    v[0].to_s(context, describing)
                 } else {
                     let mut s = String::from("(?:");
                     for (i, e) in v.iter().enumerate() {
                         if i > 0 {
                             s.push('|');
                         }
-                        s += &e.to_s(context);
+                        s += &e.to_s(context, describing);
                     }
                     s.push(')');
                     s
                 }
             }
             Expression::Repetition(e, n, _) => {
-                let mut s = e.to_s(context);
+                let mut s = e.to_s(context, describing);
                 let reps = format!("{{{}}}", n);
                 if is_atomic(&s) {
                     s + reps.as_str()
@@ -307,10 +307,16 @@ impl Expression {
             }
             Expression::Sequence(v, _) => v
                 .iter()
-                .map(|e| e.to_s(context))
+                .map(|e| e.to_s(context, describing))
                 .collect::<Vec<_>>()
                 .join(""),
-            Expression::Grammar(g, _) => g.to_s(context),
+            Expression::Grammar(g, _) => {
+                if describing && g.name.is_some() {
+                    format!("{{{}}}", g.name.as_ref().unwrap())
+                } else {
+                    g.to_s(context, describing)
+                }
+            }
             Expression::Part(s, _) => s.clone(),
             Expression::Raw(s) => s.clone(),
         };

@@ -392,7 +392,7 @@ impl Pidgin {
     ///
     /// # Errors
     ///
-    /// `matcher` throws errors where `Grammar#matcher` throws errors.
+    /// `matcher` throws errors where `Grammar::matcher` throws errors.
     pub fn matcher(&self) -> Result<Matcher, Error> {
         self.clone().compile().matcher()
     }
@@ -621,7 +621,7 @@ impl Pidgin {
                 if match_length > 1 {
                     let s = phrase[i..i + rep_length]
                         .iter()
-                        .map(|e| e.to_s(&self.flags))
+                        .map(|e| e.to_s(&self.flags, false))
                         .collect::<Vec<String>>()
                         .join("");
                     let existing_length = s.len();
