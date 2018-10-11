@@ -3,6 +3,7 @@ use regex::Error;
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::{BTreeSet, VecDeque};
 use util::{Expression, Flags};
+use std::fmt;
 
 /// A compiled collection of rules ready for the building of a
 /// `pidgin::Matcher` or for use in the definition of a new rule.
@@ -29,25 +30,41 @@ impl Grammar {
     }
     /// Produces a quasi-BNF representation of the grammar.
     ///
+    /// This is how `pidging::Grammar` implements `std::fmt::Display`, so a
+    /// grammar's description is what you get if you feed it to the `{}` pattern.
+    ///
+    /// # Examples
+    ///
     /// ```rust
     /// # use pidgin::Pidgin;
     /// let mut p = Pidgin::new();
     /// let g = p.grammar(&vec!["bar", "baz"]);
     /// p.rule("foo", &g);
+    /// p = p.case_insensitive(true);
     /// let g = p.grammar(&vec!["ping", "pang", "pong"]);
+    /// p = p.case_insensitive(false);
     /// p.rule("xyzzy", &g);
     /// let g = p.grammar(&vec!["xyzzy", "qux"]);
     /// p.rule("plugh", &g);
     /// let g = p.grammar(&vec!["foo", "plugh"]);
     /// println!("{}", g.describe());
-    /// //   TOP := {foo}|{plugh}
-    /// //   foo := ba[rz]
-    /// // plugh := qux|{xyzzy}
-    /// // xyzzy := p[aio]ng
+    /// //   TOP :=      {foo}|{plugh}
+    /// //   foo :=      ba[rz]
+    /// // plugh :=      qux|{xyzzy}
+    /// // xyzzy := (?i) p[aio]ng
+    /// println!("{}", g);
+    /// //   TOP :=      {foo}|{plugh}
+    /// //   foo :=      ba[rz]
+    /// // plugh :=      qux|{xyzzy}
+    /// // xyzzy := (?i) p[aio]ng
     /// ```
     pub fn describe(&self) -> String {
         let g = self.describable_grammar();
-        let mut rules = vec![(String::from("TOP"), g._describe())];
+        let mut flags = g.flags(&Flags::defaults());
+        if flags.len() > 0 {
+            flags = format!("(?{})", flags);
+        }
+        let mut rules = vec![(String::from("TOP"), flags, g._describe())];
         let mut seen: BTreeSet<String> = BTreeSet::new();
         let mut queue = VecDeque::new();
         for r in self.rules() {
@@ -57,7 +74,11 @@ impl Grammar {
         loop {
             if let Some((r, g)) = queue.pop_front() {
                 if !seen.contains(&r) {
-                    rules.push((r.clone(), g._describe()));
+                    let mut flags = g.flags(&Flags::defaults());
+                    if flags.len() > 0 {
+                        flags = format!("(?{})", flags);
+                    }
+                    rules.push((r.clone(), flags, g._describe()));
                     seen.insert(r);
                     for r in g.rules() {
                         let og = g.find(&r).unwrap().describable_grammar();
@@ -69,15 +90,31 @@ impl Grammar {
             }
         }
         let mut max = 3;
-        for (ref n, _) in &rules {
+        let mut flag_max = 0;
+        for (ref n, flags, _) in &rules {
             let l = n.len();
             if l > max {
                 max = l;
             }
+            let l = flags.len();
+            if l > flag_max {
+                flag_max = l;
+            }
+        }
+        if flag_max > 0 {
+            flag_max += 1;
         }
         let mut s = String::new();
-        for (n, d) in rules {
-            s = s + &format!("{: >width$} := {}", n, d, width = max) + "\n";
+        for (n, f, d) in rules {
+            s =
+                s + &format!(
+                    "{: >width$} := {: <flag_width$}{}",
+                    n,
+                    f,
+                    d,
+                    width = max,
+                    flag_width = flag_max
+                ) + "\n";
         }
         s
     }
@@ -303,3 +340,9 @@ impl PartialEq for Grammar {
 }
 
 impl Eq for Grammar {}
+
+impl fmt::Display for Grammar {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.describe())
+    }
+}

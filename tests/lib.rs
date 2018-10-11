@@ -398,15 +398,36 @@ fn description() {
     let mut p = Pidgin::new();
     let g = p.grammar(&vec!["bar", "baz"]);
     p.rule("foo", &g);
+    p = p.case_insensitive(true);
     let g = p.grammar(&vec!["ping", "pang", "pong"]);
+    p = p.case_insensitive(false);
     p.rule("xyzzy", &g);
     let g = p.grammar(&vec!["xyzzy", "qux"]);
     p.rule("plugh", &g);
     let g = p.grammar(&vec!["foo", "plugh"]);
     println!("{}", g.describe());
     assert_eq!(
-        "  TOP := {foo}|{plugh}\n  foo := ba[rz]\nplugh := qux|{xyzzy}\nxyzzy := p[aio]ng\n",
+        "  TOP :=      {foo}|{plugh}\n  foo :=      ba[rz]\nplugh :=      qux|{xyzzy}\nxyzzy := (?i) p[aio]ng\n",
         g.describe()
+    );
+}
+
+#[test]
+fn grammar_format() {
+    let mut p = Pidgin::new();
+    let g = p.grammar(&vec!["bar", "baz"]);
+    p.rule("foo", &g);
+    p = p.case_insensitive(true);
+    let g = p.grammar(&vec!["ping", "pang", "pong"]);
+    p = p.case_insensitive(false);
+    p.rule("xyzzy", &g);
+    let g = p.grammar(&vec!["xyzzy", "qux"]);
+    p.rule("plugh", &g);
+    let g = p.grammar(&vec!["foo", "plugh"]);
+    println!("{}", g.describe());
+    assert_eq!(
+        "  TOP :=      {foo}|{plugh}\n  foo :=      ba[rz]\nplugh :=      qux|{xyzzy}\nxyzzy := (?i) p[aio]ng\n",
+        format!("{}", g)
     );
 }
 
