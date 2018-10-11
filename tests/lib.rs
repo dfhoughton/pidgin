@@ -409,3 +409,10 @@ fn description() {
         g.describe()
     );
 }
+
+#[test]
+fn reverse_greed() {
+    let mut p = Pidgin::new().reverse_greed(true);
+    let g = p.grammar(&vec!["bar"]);
+    assert_eq!("(?U:bar)", g.to_string());
+}

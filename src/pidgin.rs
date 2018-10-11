@@ -291,6 +291,15 @@ impl Pidgin {
         self.flags.enclosed = case;
         self
     }
+    /// Toggles the U flag of Rust regexen. Per the documentation, U "swap[s] the
+    /// meaning of x* and x*?", thus turning a stingy match greedy and a greedy
+    /// match stingy.
+    ///
+    /// By default this is false.
+    pub fn reverse_greed(mut self, case: bool) -> Pidgin {
+        self.flags.reverse_greed = case;
+        self
+    }
     /// Treat any white space found in an alternate as "some amount of white space".
     /// if the `required` parameter is `true`, it means "at least some white
     /// space". If it is false, it means "maybe some white space".

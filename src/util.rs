@@ -139,6 +139,7 @@ pub(crate) struct Flags {
     pub(crate) dot_all: bool,
     pub(crate) multi_line: bool,
     pub(crate) unicode: bool,
+    pub(crate) reverse_greed: bool,
     pub(crate) enclosed: bool,
 }
 
@@ -149,6 +150,7 @@ impl Flags {
             dot_all: false,
             multi_line: false,
             unicode: true,
+            reverse_greed: false,
             enclosed: false,
         }
     }
@@ -179,6 +181,10 @@ impl Ord for Flags {
             return o;
         }
         let o = self.enclosed.cmp(&other.enclosed);
+        if o != Ordering::Equal {
+            return o;
+        }
+        let o = self.reverse_greed.cmp(&other.reverse_greed);
         if o != Ordering::Equal {
             return o;
         }

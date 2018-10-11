@@ -179,6 +179,7 @@ impl Grammar {
             || self.flags.dot_all ^ context.dot_all
             || self.flags.multi_line ^ context.multi_line
             || self.flags.unicode ^ context.unicode
+            || self.flags.reverse_greed ^ context.reverse_greed
     }
     // flag string when needed
     fn flags(&self, context: &Flags) -> String {
@@ -213,6 +214,13 @@ impl Grammar {
                 flags_off.push("u");
             } else if self.flags.enclosed {
                 flags_on.push("u");
+            }
+        }
+        if self.flags.reverse_greed ^ context.reverse_greed {
+            if !self.flags.reverse_greed {
+                flags_off.push("U");
+            } else if self.flags.reverse_greed {
+                flags_on.push("U");
             }
         }
         let mut flags = String::new();
