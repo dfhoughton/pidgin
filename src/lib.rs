@@ -11,7 +11,7 @@ used by adding `pidgin` to your dependencies in your project's `Cargo.toml`.
 
 ```toml
 [dependencies]
-pidgin = "0.1.1"
+pidgin = "0.1.3"
 ```
 
 and this to your crate root:
@@ -152,9 +152,27 @@ fn experiment() -> Result<(), Box<Error>> {
     // but we said single-letter days had to be capitalized
     assert!(!matcher.is_match("f"));
 
+    println!("{}", date);
+
     Ok(())
 }
 ```
+
+The `println!` in the example above will produces a BNF-esque description of the grammar.
+
+```bash
+           TOP := (?i) \b{monthday}(?-i:\s+){month}(?-i:\s+){year}|{month}(?-i:\s+){monthday}(:?,(?-i:\s+){year})?|{weekday}(:?,(?-i:\s+){month}(?-i:\s+){monthday},(?-i:\s+){year})?|{numeric_date}\b
+      monthday := (?i) \b[4-9]|30?|1[0-9]?|2[0-9]?\b
+         month := (?i) \bMa(?:y|r(:?ch)?)|Oct(:?ober)?|Dec(:?ember)?|Feb(:?ruary)?|Nov(:?ember)?|Sep(:?tember)?|A(?:pr(:?il)?|ug(:?ust)?)|J(?:u(?:ly?|ne?)|an(:?uary)?)\b
+          year :=      [12][0-9]{3}|[0-9]{2}
+       weekday := (?i) (?:\b(?:Fr(:?i(:?day)?)?|Mo(:?n(:?day)?)?|We(:?d(:?nesday)?)?|S(?:u(:?n(:?day)?)?|a(:?t(:?urday)?)?)|T(?:u(:?e(:?sday)?)?|h(:?u(:?rsday)?)?))\b)|(?-i:\b[FMR-UW]\b)
+  numeric_date := (?i) \b{year}(?-i:\s*)(?:\-(?-i:\s*){numeric_months}(?-i:\s*)\-|/(?-i:\s*){numeric_months}(?-i:\s*)/)(?-i:\s*){numeric_days}|{numeric_days}(?-i:\s*)(?:\-(?-i:\s*){numeric_months}(?-i:\s*)\-|/(?-i:\s*){numeric_months}(?-i:\s*)/)(?-i:\s*){year}|{numeric_months}(?-i:\s*)(?:\-(?-i:\s*){numeric_days}(?-i:\s*)\-|/(?-i:\s*){numeric_days}(?-i:\s*)/)(?-i:\s*){year}\b
+  numeric_days := (?i) \b[4-9]|30?|0[1-9]|1[0-9]?|2[0-9]?\b
+numeric_months := (?i) \b[2-9]|1[01]?|0[1-9]\b
+```
+
+Note, these rules generally cannot be compiled directly into regular expressions because the rule "references" in the descriptions, `{monthday}` and so forth,
+violate regular expression syntax.
 
 */
 
