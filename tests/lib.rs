@@ -404,5 +404,8 @@ fn description() {
     p.rule("plugh", &g);
     let g = p.grammar(&vec!["foo", "plugh"]);
     println!("{}", g.describe());
-    assert_eq!("", g.describe());
+    assert_eq!(
+        "  TOP := {foo}|{plugh}\n  foo := ba[rz]\nplugh := qux|{xyzzy}\nxyzzy := p[aio]ng\n",
+        g.describe()
+    );
 }

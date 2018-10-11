@@ -1,7 +1,7 @@
 use matching::Matcher;
 use regex::Error;
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeSet, VecDeque};
 use util::{Expression, Flags};
 
 /// A compiled collection of rules ready for the building of a
@@ -27,6 +27,24 @@ impl Grammar {
     pub fn matcher(&self) -> Result<Matcher, Error> {
         Matcher::new(&self)
     }
+    /// Produces a quasi-BNF representation of the grammar.
+    ///
+    /// ```rust
+    /// # use pidgin::Pidgin;
+    /// let mut p = Pidgin::new();
+    /// let g = p.grammar(&vec!["bar", "baz"]);
+    /// p.rule("foo", &g);
+    /// let g = p.grammar(&vec!["ping", "pang", "pong"]);
+    /// p.rule("xyzzy", &g);
+    /// let g = p.grammar(&vec!["xyzzy", "qux"]);
+    /// p.rule("plugh", &g);
+    /// let g = p.grammar(&vec!["foo", "plugh"]);
+    /// println!("{}", g.describe());
+    /// //   TOP := {foo}|{plugh}
+    /// //   foo := ba[rz]
+    /// // plugh := qux|{xyzzy}
+    /// // xyzzy := p[aio]ng
+    /// ```
     pub fn describe(&self) -> String {
         let g = self.describable_grammar();
         let mut rules = vec![(String::from("TOP"), g._describe())];
@@ -72,7 +90,7 @@ impl Grammar {
     fn _describe(&self) -> String {
         self.sequence
             .iter()
-            .map(|e| e.to_s(&self.flags, true))
+            .map(|e| e.to_s(&self.flags, true, true))
             .collect::<Vec<_>>()
             .join("")
     }
@@ -140,7 +158,7 @@ impl Grammar {
     /// group names may repeat, in which case the stringification cannot be
     /// compiled into a regular expression.
     pub fn to_string(&self) -> String {
-        self.to_s(&Flags::defaults(), false)
+        self.to_s(&Flags::defaults(), false, false)
     }
     pub(crate) fn clear_recursive(&self) -> Grammar {
         let sequence = self.sequence.iter().map(|e| e.clear_names()).collect();
@@ -207,19 +225,19 @@ impl Grammar {
         }
         flags
     }
-    pub(crate) fn to_s(&self, context: &Flags, describing: bool) -> String {
+    pub(crate) fn to_s(&self, context: &Flags, describing: bool, top: bool) -> String {
         let mut s = if self.name.is_some() {
             format!("(?P<{}>", self.name.as_ref().unwrap())
         } else {
             String::new()
         };
-        if self.needs_closure(context) {
+        if !top && self.needs_closure(context) {
             s = s + format!("(?{}:", self.flags(context)).as_str();
         }
         for e in &self.sequence {
-            s += e.to_s(&self.flags, describing).as_ref();
+            s += e.to_s(&self.flags, describing, top).as_ref();
         }
-        if self.needs_closure(context) {
+        if !top && self.needs_closure(context) {
             s = s + ")"
         }
         if self.name.is_some() {

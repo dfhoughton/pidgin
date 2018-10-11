@@ -621,7 +621,7 @@ impl Pidgin {
                 if match_length > 1 {
                     let s = phrase[i..i + rep_length]
                         .iter()
-                        .map(|e| e.to_s(&self.flags, false))
+                        .map(|e| e.to_s(&self.flags, false, false))
                         .collect::<Vec<String>>()
                         .join("");
                     let existing_length = s.len();

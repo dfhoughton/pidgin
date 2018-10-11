@@ -277,27 +277,33 @@ impl Expression {
             Expression::Raw(_) => false,
         }
     }
-    pub(crate) fn to_s(&self, context: &Flags, describing: bool) -> String {
+    pub(crate) fn to_s(&self, context: &Flags, describing: bool, top: bool) -> String {
         // String::new()
         let s = match self {
             Expression::Char(c, _) => escape(&c.to_string()),
             Expression::Alternation(v, _) => {
                 if v.len() == 1 {
-                    v[0].to_s(context, describing)
+                    v[0].to_s(context, describing, top)
                 } else {
-                    let mut s = String::from("(?:");
+                    let mut s = if top {
+                        String::from("")
+                    } else {
+                        String::from("(?:")
+                    };
                     for (i, e) in v.iter().enumerate() {
                         if i > 0 {
                             s.push('|');
                         }
-                        s += &e.to_s(context, describing);
+                        s += &e.to_s(context, describing, false);
                     }
-                    s.push(')');
+                    if !top {
+                        s.push(')');
+                    }
                     s
                 }
             }
             Expression::Repetition(e, n, _) => {
-                let mut s = e.to_s(context, describing);
+                let mut s = e.to_s(context, describing, false);
                 let reps = format!("{{{}}}", n);
                 if is_atomic(&s) {
                     s + reps.as_str()
@@ -307,14 +313,14 @@ impl Expression {
             }
             Expression::Sequence(v, _) => v
                 .iter()
-                .map(|e| e.to_s(context, describing))
+                .map(|e| e.to_s(context, describing, false))
                 .collect::<Vec<_>>()
                 .join(""),
             Expression::Grammar(g, _) => {
                 if describing && g.name.is_some() {
                     format!("{{{}}}", g.name.as_ref().unwrap())
                 } else {
-                    g.to_s(context, describing)
+                    g.to_s(context, describing, top)
                 }
             }
             Expression::Part(s, _) => s.clone(),
