@@ -124,7 +124,7 @@ impl Pidgin {
     ///
     /// # Errors
     ///
-    /// `rx_foreign_rule` returns an error if `rx` fails to compile.
+    /// `foreign_rx_rule` returns an error if `rx` fails to compile.
     pub fn rx_rule(&mut self, rx: &str, g: &Grammar, name: Option<&str>) -> Result<(), Error> {
         match Regex::new(rx) {
             Err(e) => Err(e),
@@ -190,15 +190,15 @@ impl Pidgin {
     /// # use std::error::Error;
     /// # fn demo() -> Result<(),Box<Error>> {
     /// # let mut pidgin = Pidgin::new();
-    /// pidgin.rx_foreign_rule(r"\s+", r"\t+", Some("whitespace_means_tabs"))?;
+    /// pidgin.foreign_rx_rule(r"\s+", r"\t+", Some("whitespace_means_tabs"))?;
     /// # Ok(())
     /// # }
     /// ```
     ///
     /// # Errors
     ///
-    /// `rx_foreign_rule` returns an error if either `rx` or `pattern` fails to compile.
-    pub fn rx_foreign_rule(
+    /// `foreign_rx_rule` returns an error if either `rx` or `pattern` fails to compile.
+    pub fn foreign_rx_rule(
         &mut self,
         rx: &str,
         pattern: &str,
@@ -306,9 +306,9 @@ impl Pidgin {
     pub fn normalize_whitespace(mut self, required: bool) -> Pidgin {
         self.remove_rx_rule(r"\s+").unwrap();
         if required {
-            self.rx_foreign_rule(r"\s+", r"\s+", None).unwrap();
+            self.foreign_rx_rule(r"\s+", r"\s+", None).unwrap();
         } else {
-            self.rx_foreign_rule(r"\s+", r"\s*", None).unwrap();
+            self.foreign_rx_rule(r"\s+", r"\s*", None).unwrap();
         }
         self
     }

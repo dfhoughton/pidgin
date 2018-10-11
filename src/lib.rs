@@ -11,7 +11,7 @@ used by adding `pidgin` to your dependencies in your project's `Cargo.toml`.
 
 ```toml
 [dependencies]
-pidgin = "0.1.3"
+pidgin = "0.1.4"
 ```
 
 and this to your crate root:

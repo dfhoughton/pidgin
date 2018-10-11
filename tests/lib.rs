@@ -137,7 +137,7 @@ fn simple_string_symbol_capturing() {
 fn simple_rx_symbol_capturing() {
     let words = vec!["foo bar"];
     let mut p = Pidgin::new();
-    p.rx_foreign_rule(r"\s+", r"\s+", Some("ws")).unwrap();
+    p.foreign_rx_rule(r"\s+", r"\s+", Some("ws")).unwrap();
     p.add(&words);
     let pattern = p.compile();
     assert_eq!("foo(?P<ws>(?:\\s+))bar", pattern.to_string());
@@ -147,7 +147,7 @@ fn simple_rx_symbol_capturing() {
 fn simple_rx_symbol_non_capturing() {
     let words = vec!["foo bar"];
     let mut p = Pidgin::new();
-    p.rx_foreign_rule(r"\s+", r"\s+", None).unwrap();
+    p.foreign_rx_rule(r"\s+", r"\s+", None).unwrap();
     p.add(&words);
     let pattern = p.compile();
     assert_eq!("foo(?:\\s+)bar", pattern.to_string());
@@ -168,7 +168,7 @@ fn string_string_symbol_ordering() {
 fn string_regex_symbol_ordering() {
     let words = vec!["foo f"];
     let mut p = Pidgin::new();
-    p.rx_foreign_rule("foo", "bar", None).unwrap();
+    p.foreign_rx_rule("foo", "bar", None).unwrap();
     p.rule("f", &Pidgin::new().grammar(&["plugh"]));
     p.add(&words);
     let pattern = p.compile();
@@ -179,8 +179,8 @@ fn string_regex_symbol_ordering() {
 fn regex_regex_symbol_ordering() {
     let words = vec!["foo f"];
     let mut p = Pidgin::new();
-    p.rx_foreign_rule("foo", "bar", None).unwrap();
-    p.rx_foreign_rule("f", "plugh", None).unwrap();
+    p.foreign_rx_rule("foo", "bar", None).unwrap();
+    p.foreign_rx_rule("f", "plugh", None).unwrap();
     p.add(&words);
     let pattern = p.compile();
     assert_eq!("(?:bar) (?:plugh)", pattern.to_string());
