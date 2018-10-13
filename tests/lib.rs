@@ -1,7 +1,7 @@
 #![feature(test)]
 extern crate lazy_static;
 extern crate pidgin;
-use pidgin::{Grammar, Pidgin};
+use pidgin::{gf, sf, Grammar, Pidgin};
 extern crate regex;
 use regex::Regex;
 
@@ -436,4 +436,216 @@ fn reverse_greed() {
     let mut p = Pidgin::new().reverse_greed(true);
     let g = p.grammar(&vec!["bar"]);
     assert_eq!("(?U:bar)", g.to_string());
+}
+
+#[test]
+fn reps() {
+    let mut p = Pidgin::new();
+    let g = p.grammar(&vec!["foo", "bar", "baz"]);
+    p.build_rule("foo", vec![sf("xyzzy "), gf(g.reps(3)), sf(" plugh")]);
+    let g = p.grammar(&vec!["foo"]);
+    let m = g.matcher().unwrap();
+    assert!(m.is_match("xyzzy foobarbaz plugh"));
+    assert!(!m.is_match("xyzzy foo plugh"));
+    assert!(!m.is_match("xyzzy foobarbazfoo plugh"));
+}
+
+#[test]
+fn min_reps_0() {
+    let mut p = Pidgin::new();
+    let g = p.grammar(&vec!["foo", "bar", "baz"]);
+    p.build_rule(
+        "foo",
+        vec![sf("xyzzy "), gf(g.reps_min(0).unwrap()), sf(" plugh")],
+    );
+    let g = p.grammar(&vec!["foo"]);
+    assert!(g.describe().contains("*"));
+    let m = g.matcher().unwrap();
+    assert!(m.is_match("xyzzy  plugh"));
+    assert!(m.is_match("xyzzy foo plugh"));
+    assert!(m.is_match("xyzzy foobar plugh"));
+    assert!(m.is_match("xyzzy foobarbaz plugh"));
+}
+
+#[test]
+fn min_reps_1() {
+    let mut p = Pidgin::new();
+    let g = p.grammar(&vec!["foo", "bar", "baz"]);
+    p.build_rule(
+        "foo",
+        vec![sf("xyzzy "), gf(g.reps_min(1).unwrap()), sf(" plugh")],
+    );
+    let g = p.grammar(&vec!["foo"]);
+    assert!(g.describe().contains("+"));
+    let m = g.matcher().unwrap();
+    assert!(!m.is_match("xyzzy  plugh"));
+    assert!(m.is_match("xyzzy foo plugh"));
+    assert!(m.is_match("xyzzy foobar plugh"));
+    assert!(m.is_match("xyzzy foobarbaz plugh"));
+}
+
+#[test]
+fn min_reps_2() {
+    let mut p = Pidgin::new();
+    let g = p.grammar(&vec!["foo", "bar", "baz"]);
+    p.build_rule(
+        "foo",
+        vec![sf("xyzzy "), gf(g.reps_min(2).unwrap()), sf(" plugh")],
+    );
+    let g = p.grammar(&vec!["foo"]);
+    assert!(g.describe().contains("{2,}"));
+    let m = g.matcher().unwrap();
+    assert!(!m.is_match("xyzzy  plugh"));
+    assert!(!m.is_match("xyzzy foo plugh"));
+    assert!(m.is_match("xyzzy foobar plugh"));
+    assert!(m.is_match("xyzzy foobarbaz plugh"));
+}
+
+#[test]
+fn max_reps_1() {
+    let mut p = Pidgin::new();
+    let g = p.grammar(&vec!["foo", "bar", "baz"]);
+    p.build_rule(
+        "foo",
+        vec![sf("xyzzy "), gf(g.reps_max(1).unwrap()), sf(" plugh")],
+    );
+    let g = p.grammar(&vec!["foo"]);
+    assert!(g.describe().contains("?"));
+    let m = g.matcher().unwrap();
+    assert!(m.is_match("xyzzy  plugh"));
+    assert!(m.is_match("xyzzy foo plugh"));
+    assert!(!m.is_match("xyzzy foobar plugh"));
+    assert!(!m.is_match("xyzzy foobarbaz plugh"));
+}
+
+#[test]
+fn max_reps_2() {
+    let mut p = Pidgin::new();
+    let g = p.grammar(&vec!["foo", "bar", "baz"]);
+    p.build_rule(
+        "foo",
+        vec![sf("xyzzy "), gf(g.reps_max(2).unwrap()), sf(" plugh")],
+    );
+    let g = p.grammar(&vec!["foo"]);
+    assert!(g.describe().contains("{0,2}"));
+    let m = g.matcher().unwrap();
+    assert!(m.is_match("xyzzy  plugh"));
+    assert!(m.is_match("xyzzy foo plugh"));
+    assert!(m.is_match("xyzzy foobar plugh"));
+    assert!(!m.is_match("xyzzy foobarbaz plugh"));
+}
+
+#[test]
+fn min_max_reps_0_1() {
+    let mut p = Pidgin::new();
+    let g = p.grammar(&vec!["foo", "bar", "baz"]);
+    p.build_rule(
+        "foo",
+        vec![
+            sf("xyzzy "),
+            gf(g.reps_min_max(0, 1).unwrap()),
+            sf(" plugh"),
+        ],
+    );
+    let g = p.grammar(&vec!["foo"]);
+    assert!(g.describe().contains("?"));
+    let m = g.matcher().unwrap();
+    assert!(m.is_match("xyzzy  plugh"));
+    assert!(m.is_match("xyzzy foo plugh"));
+    assert!(!m.is_match("xyzzy foobar plugh"));
+    assert!(!m.is_match("xyzzy foobarbaz plugh"));
+}
+
+#[test]
+fn min_max_reps_1_1() {
+    let mut p = Pidgin::new();
+    let g = p.grammar(&vec!["foo", "bar", "baz"]);
+    p.build_rule(
+        "foo",
+        vec![
+            sf("xyzzy "),
+            gf(g.reps_min_max(1, 1).unwrap()),
+            sf(" plugh"),
+        ],
+    );
+    let g = p.grammar(&vec!["foo"]);
+    let m = g.matcher().unwrap();
+    assert!(!m.is_match("xyzzy  plugh"));
+    assert!(m.is_match("xyzzy foo plugh"));
+    assert!(!m.is_match("xyzzy foobar plugh"));
+    assert!(!m.is_match("xyzzy foobarbaz plugh"));
+}
+
+#[test]
+fn min_max_reps_2_2() {
+    let mut p = Pidgin::new();
+    let g = p.grammar(&vec!["foo", "bar", "baz"]);
+    p.build_rule(
+        "foo",
+        vec![
+            sf("xyzzy "),
+            gf(g.reps_min_max(2, 2).unwrap()),
+            sf(" plugh"),
+        ],
+    );
+    let g = p.grammar(&vec!["foo"]);
+    assert!(g.describe().contains("{2}"));
+    let m = g.matcher().unwrap();
+    assert!(!m.is_match("xyzzy  plugh"));
+    assert!(!m.is_match("xyzzy foo plugh"));
+    assert!(m.is_match("xyzzy foobar plugh"));
+    assert!(!m.is_match("xyzzy foobarbaz plugh"));
+}
+
+#[test]
+fn min_max_reps_1_2() {
+    let mut p = Pidgin::new();
+    let g = p.grammar(&vec!["foo", "bar", "baz"]);
+    p.build_rule(
+        "foo",
+        vec![
+            sf("xyzzy "),
+            gf(g.reps_min_max(1, 2).unwrap()),
+            sf(" plugh"),
+        ],
+    );
+    let g = p.grammar(&vec!["foo"]);
+    assert!(g.describe().contains("{1,2}"));
+    let m = g.matcher().unwrap();
+    assert!(!m.is_match("xyzzy  plugh"));
+    assert!(m.is_match("xyzzy foo plugh"));
+    assert!(m.is_match("xyzzy foobar plugh"));
+    assert!(!m.is_match("xyzzy foobarbaz plugh"));
+}
+
+#[test]
+fn build_rule_bound() {
+    let mut p = Pidgin::new();
+    let g = p.grammar(&vec!["foo", "bar", "baz"]);
+    p = p.word_bound();
+    p.build_rule("foo", vec![sf("xyzzy"), gf(g), sf("plugh")]);
+    let g = p.grammar(&vec!["foo"]);
+    print!("{}", g);
+    let m = g.matcher().unwrap();
+    assert!(m.is_match("xyzzyfooplugh"));
+    assert!(!m.is_match("_xyzzyfooplugh"));
+    assert!(!m.is_match("xyzzyfooplugh_"));
+    assert!(!m.is_match("xyzzy foo plugh"));
+}
+
+#[test]
+fn boundaries_only_on_leaves() {
+    let mut p = Pidgin::new().word_bound();
+    let words = vec!["foo", "@bar", "baz"];
+    let g = p.grammar(&words);
+    p.rule("foo", &g);
+    let m = p.grammar(&vec!["foo"]).matcher().unwrap();
+    for w in words {
+        assert!(m.is_match(w), w);
+        let right_bound = w.to_string() + "b";
+        assert!(!m.is_match(&right_bound), right_bound);
+    }
+    assert!(!m.is_match("bfoo"), "bfoo");
+    assert!(!m.is_match("bbaz"), "bbaz");
+    assert!(m.is_match("b@bar"), "b@bar");
 }

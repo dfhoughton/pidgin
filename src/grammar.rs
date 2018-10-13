@@ -2,8 +2,8 @@ use matching::Matcher;
 use regex::Error;
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::{BTreeSet, VecDeque};
-use util::{Expression, Flags};
 use std::fmt;
+use util::{is_atomic, Expression, Flags};
 
 /// A compiled collection of rules ready for the building of a
 /// `pidgin::Matcher` or for use in the definition of a new rule.
@@ -16,6 +16,8 @@ pub struct Grammar {
     pub(crate) name: Option<String>,
     pub(crate) sequence: Vec<Expression>,
     pub(crate) flags: Flags,
+    pub(crate) lower_limit: Option<usize>,
+    pub(crate) upper_limit: Option<usize>,
 }
 
 impl Grammar {
@@ -27,6 +29,233 @@ impl Grammar {
     /// error may be returned.
     pub fn matcher(&self) -> Result<Matcher, Error> {
         Matcher::new(&self)
+    }
+    /// Sets the required number of repetitions of the grammar in the string
+    /// matched against to exactly `r`.
+    ///
+    /// This is chiefly useful in conjunction with `Pidgin::build_rule`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use pidgin::{Pidgin, sf, gf};
+    /// # use std::error::Error;
+    /// # fn dem() -> Result<(),Box<Error>> {
+    /// let mut p = Pidgin::new();
+    /// let g = p.grammar(&vec!["foo", "bar", "baz"]);
+    /// p.build_rule("foo", vec![sf("xyzzy "), gf(g.reps(3)), sf(" plugh")]);
+    /// let g = p.grammar(&vec!["foo"]);
+    /// let m = g.matcher()?;
+    /// assert!(m.is_match("xyzzy foobarbaz plugh"));
+    /// assert!(!m.is_match("xyzzy foo plugh"));
+    /// assert!(!m.is_match("xyzzy foobarbazfoo plugh"));
+    /// # Ok(()) }
+    /// ```
+    pub fn reps(&self, r: usize) -> Grammar {
+        let mut g = self.clone();
+        g.lower_limit = Some(r);
+        g.upper_limit = Some(r);
+        g
+    }
+    /// Sets the minimum required number of repetitions of the grammar in the string
+    /// matched against to `r`. If no maximum is set, this will be equivalent
+    /// to the regex repetition suffix `{r,}` -- there will be no upper limit.
+    ///
+    /// If you set the lower limit to 0 and set no upper limit, this will be
+    /// equivalent to the regex repetition suffix `*`. Likewise, 1 and no upper
+    /// limit will be equivalent to `+`.
+    ///
+    /// This is chiefly useful in conjunction with `Pidgin::build_rule`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use pidgin::{Pidgin, sf, gf};
+    /// # use std::error::Error;
+    /// # fn dem() -> Result<(),Box<Error>> {
+    /// let mut p = Pidgin::new();
+    /// let g = p.grammar(&vec!["foo", "bar", "baz"]);
+    /// p.build_rule("foo", vec![sf("xyzzy "), gf(g.reps_min(3)?), sf(" plugh")]);
+    /// let m = p.matcher()?;
+    /// assert!(m.is_match("xyzzy foobarbaz plugh"));
+    /// assert!(m.is_match("xyzzy foobarbazfoo plugh"));
+    /// assert!(!m.is_match("xyzzy foobar plugh"));
+    /// # Ok(()) }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// If an upper limit has been set and it is lower than the minimum, an
+    /// error will be returned
+    pub fn reps_min(&self, r: usize) -> Result<Grammar, String> {
+        if self.upper_limit.is_none() || self.lower_limit.unwrap() >= r {
+            let mut flags = self.flags.clone();
+            flags.enclosed = true;
+            Ok(Grammar {
+                flags,
+                name: self.name.clone(),
+                sequence: self.sequence.clone(),
+                lower_limit: Some(r),
+                upper_limit: self.upper_limit.clone(),
+            })
+        } else {
+            Err(format!(
+                "minimum repetitions {} is greater than maximum repetitions {}",
+                r,
+                self.upper_limit.unwrap()
+            ))
+        }
+    }
+    /// Sets the maximum number of repetitions of the grammar in the string
+    /// matched against to `r`. If no minimum is set, this will be equivalent
+    /// to the regex repetition suffix `{0,r}` -- there will be no lower limit.
+    ///
+    /// This is chiefly useful in conjunction with `Pidgin::build_rule`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use pidgin::{Pidgin, sf, gf};
+    /// # use std::error::Error;
+    /// # fn dem() -> Result<(),Box<Error>> {
+    /// let mut p = Pidgin::new();
+    /// let g = p.grammar(&vec!["foo", "bar", "baz"]);
+    /// p.build_rule("foo", vec![sf("xyzzy "), gf(g.reps_max(3)?), sf(" plugh")]);
+    /// let m = p.matcher()?;
+    /// assert!(m.is_match("xyzzy foobarbaz plugh"));
+    /// assert!(m.is_match("xyzzy foobar plugh"));
+    /// assert!(!m.is_match("xyzzy foobarbazfoo plugh"));
+    /// # Ok(()) }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// If an lower limit has been set and it is higher than the maximum, an
+    /// error will be returned. Also, if the maximum is set to 0 an error will
+    /// be returned.
+    pub fn reps_max(&self, r: usize) -> Result<Grammar, String> {
+        if self.lower_limit.is_none() || self.lower_limit.unwrap() <= r {
+            if r == 0 {
+                Err(String::from(
+                    "the maximum number of repetitions must be greater than 0",
+                ))
+            } else {
+                let mut flags = self.flags.clone();
+                flags.enclosed = true;
+                Ok(Grammar {
+                    flags,
+                    name: self.name.clone(),
+                    sequence: self.sequence.clone(),
+                    lower_limit: self.lower_limit.clone(),
+                    upper_limit: Some(r),
+                })
+            }
+        } else {
+            Err(format!(
+                "minimum repetitions {} is greater than maximum repetitions {}",
+                self.lower_limit.unwrap(),
+                r
+            ))
+        }
+    }
+    /// Sets the minimum number of repetitions of the grammar in the string
+    /// matched against to `min` and the maximum to `max`. If no minimum is set,
+    /// this will be equivalent to the regex repetition suffix `{min,max}`.
+    ///
+    /// This is chiefly useful in conjunction with `Pidgin::build_rule`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use pidgin::{Pidgin, sf, gf};
+    /// # use std::error::Error;
+    /// # fn dem() -> Result<(),Box<Error>> {
+    /// let mut p = Pidgin::new();
+    /// let g = p.grammar(&vec!["foo", "bar", "baz"]);
+    /// p.build_rule("foo", vec![sf("xyzzy "), gf(g.reps_min_max(1, 3)?), sf(" plugh")]);
+    /// let m = p.matcher()?;
+    /// assert!(m.is_match("xyzzy foo plugh"));
+    /// assert!(m.is_match("xyzzy foobar plugh"));
+    /// assert!(m.is_match("xyzzy foobarbaz plugh"));
+    /// assert!(!m.is_match("xyzzy  plugh"));
+    /// assert!(!m.is_match("xyzzy foobarbazfoo plugh"));
+    /// # Ok(()) }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// If the minimum is greater than the maximum or the maximum is 0, an errors
+    /// will be returned.
+    pub fn reps_min_max(&self, min: usize, max: usize) -> Result<Grammar, String> {
+        if min <= max {
+            if max == 0 {
+                Err(String::from(
+                    "the maximum number of repetitions must be greater than 0",
+                ))
+            } else {
+                let mut flags = self.flags.clone();
+                flags.enclosed = true;
+                Ok(Grammar {
+                    flags,
+                    name: self.name.clone(),
+                    sequence: self.sequence.clone(),
+                    lower_limit: Some(min),
+                    upper_limit: Some(max),
+                })
+            }
+        } else {
+            Err(format!(
+                "minimum repetitions {} is greater than maximum repetitions {}",
+                min, max
+            ))
+        }
+    }
+    pub(crate) fn any_suffix(&self) -> bool {
+        (self.lower_limit.is_some() || self.upper_limit.is_some()) && !(self.lower_limit.is_some()
+            && self.upper_limit.is_some()
+            && self.lower_limit.unwrap() == 1
+            && self.upper_limit.unwrap() == 1)
+    }
+    pub(crate) fn repetition_suffix(&self) -> String {
+        if self.lower_limit.is_none() {
+            if self.upper_limit.is_none() {
+                String::from("")
+            } else {
+                let r = self.upper_limit.unwrap();
+                if r == 1 {
+                    String::from("?")
+                } else {
+                    format!("{{0,{}}}", r)
+                }
+            }
+        } else if self.upper_limit.is_none() {
+            let r = self.lower_limit.unwrap();
+            match r {
+                0 => String::from("*"),
+                1 => String::from("+"),
+                _ => format!("{{{},}}", r),
+            }
+        } else {
+            let min = self.lower_limit.unwrap();
+            let max = self.upper_limit.unwrap();
+            match min {
+                0 => match max {
+                    1 => String::from("?"),
+                    _ => format!("{{0,{}}}", max),
+                },
+                _ => {
+                    if min == max {
+                        if min == 1 {
+                            String::from("")
+                        } else {
+                            format!("{{{}}}", min)
+                        }
+                    } else {
+                        format!("{{{},{}}}", min, max)
+                    }
+                }
+            }
+        }
     }
     /// Produces a quasi-BNF representation of the grammar.
     ///
@@ -203,13 +432,18 @@ impl Grammar {
             sequence,
             name: None,
             flags: self.flags.clone(),
+            upper_limit: self.upper_limit.clone(),
+            lower_limit: self.lower_limit.clone(),
         }
     }
     pub(crate) fn clear_name(&mut self) {
         self.name = None;
     }
     fn needs_closure(&self, context: &Flags) -> bool {
-        self.flags.enclosed || self.needs_flags_set(context)
+        self.flags.enclosed
+            || self.needs_flags_set(context)
+            || self.any_suffix() && !(self.sequence.len() == 1
+                && is_atomic(&self.sequence[0].to_s(context, true, true)))
     }
     fn needs_flags_set(&self, context: &Flags) -> bool {
         self.flags.case_insensitive ^ context.case_insensitive
@@ -276,19 +510,20 @@ impl Grammar {
         } else {
             String::new()
         };
-        if !top && self.needs_closure(context) {
+        let closure_skippable = top && !self.any_suffix();
+        if !closure_skippable && self.needs_closure(context) {
             s = s + format!("(?{}:", self.flags(context)).as_str();
         }
         for e in &self.sequence {
             s += e.to_s(&self.flags, describing, top).as_ref();
         }
-        if !top && self.needs_closure(context) {
+        if !closure_skippable && self.needs_closure(context) {
             s = s + ")"
         }
         if self.name.is_some() {
             s = s + ")"
         }
-        s
+        s + self.repetition_suffix().as_str()
     }
 }
 

@@ -186,4 +186,4 @@ mod pidgin;
 mod util;
 pub use grammar::Grammar;
 pub use matching::{Match, Matcher};
-pub use pidgin::Pidgin;
+pub use pidgin::{gf, sf, Pidgin, RuleFragment};

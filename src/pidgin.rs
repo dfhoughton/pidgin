@@ -78,7 +78,10 @@ impl Pidgin {
     /// Compiles the current rule, clearing the alternate list in preparation
     /// for constructing the next rule.
     pub fn compile(&mut self) -> Grammar {
-        let mut phrases = self.init();
+        self.compile_bounded(true, true)
+    }
+    pub fn compile_bounded(&mut self, left: bool, right: bool) -> Grammar {
+        let mut phrases = self.init(left, right);
         phrases.sort();
         phrases.dedup();
         let sequence = self.recursive_compile(phrases.as_mut());
@@ -87,6 +90,8 @@ impl Pidgin {
             sequence,
             name: None,
             flags: self.flags.clone(),
+            lower_limit: None,
+            upper_limit: None,
         }
     }
     /// A convenience method equivalent to `add(&words).compile()`.
@@ -170,6 +175,8 @@ impl Pidgin {
                             flags,
                             name: Some(name.to_string()),
                             sequence: vec![Expression::Part(pattern.to_string(), false)],
+                            lower_limit: None,
+                            upper_limit: None,
                         },
                         false,
                     ),
@@ -219,6 +226,8 @@ impl Pidgin {
                         name,
                         sequence,
                         flags,
+                        lower_limit: None,
+                        upper_limit: None,
                     };
                     self.add_symbol(Symbol::Rx(rx), Expression::Grammar(g, false));
                     Ok(())
@@ -226,6 +235,28 @@ impl Pidgin {
             },
             Err(e) => Err(e),
         }
+    }
+    pub fn build_rule(&mut self, name: &str, components: Vec<RuleFragment>) {
+        let right_limit = components.len() - 1;
+        let g = Grammar {
+            name: Some(name.to_string()),
+            flags: self.flags.clone(),
+            lower_limit: None,
+            upper_limit: None,
+            sequence: components
+                .iter()
+                .enumerate()
+                .map(|(i, f)| match f {
+                    RuleFragment::G(g) => Expression::Grammar(g.clone(), false),
+                    RuleFragment::S(s) => {
+                        self.phrases.clear();
+                        self.phrases.push(s.clone());
+                        Expression::Grammar(self.compile_bounded(i == 0, i == right_limit), false)
+                    }
+                })
+                .collect(),
+        };
+        self.add_symbol(Symbol::S(name.to_string()), Expression::Grammar(g, false));
     }
     /// Removes a rule from the list known to the `Pidgin`.
     pub fn remove_rule(&mut self, name: &str) {
@@ -387,6 +418,8 @@ impl Pidgin {
             sequence,
             name: None,
             flags: g.flags.clone(),
+            lower_limit: None,
+            upper_limit: None,
         }
     }
     /// Convenience method for generating non-backtracking regular expressions.
@@ -405,51 +438,59 @@ impl Pidgin {
     pub fn matcher(&self) -> Result<Matcher, Error> {
         self.clone().compile().matcher()
     }
-    fn add_boundary_symbols(&self, phrase: &str) -> Vec<Expression> {
+    fn add_boundary_symbols(&self, left: bool, right: bool, phrase: &str) -> Vec<Expression> {
         lazy_static! {
             static ref UNICODE_B: Regex = Regex::new(r"\w").unwrap();
             static ref ASCII_B: Regex = Regex::new(r"(?-U)\w").unwrap();
         }
-        let lb = if let Some(b) = &self.left {
-            match b {
-                Boundary::Word => {
-                    if phrase.len() > 0 {
-                        let c = phrase[0..1].to_string();
-                        let is_boundary = self.flags.unicode && UNICODE_B.is_match(&c)
-                            || !self.flags.unicode && ASCII_B.is_match(&c);
-                        if is_boundary {
-                            Some(Expression::Part(String::from(r"\b"), false))
+        let lb = if left {
+            if let Some(b) = &self.left {
+                match b {
+                    Boundary::Word => {
+                        if phrase.len() > 0 {
+                            let c = phrase[0..1].to_string();
+                            let is_boundary = self.flags.unicode && UNICODE_B.is_match(&c)
+                                || !self.flags.unicode && ASCII_B.is_match(&c);
+                            if is_boundary {
+                                Some(Expression::Part(String::from(r"\b"), false))
+                            } else {
+                                None
+                            }
                         } else {
                             None
                         }
-                    } else {
-                        None
                     }
+                    Boundary::Line => Some(Expression::Part(String::from("(?m)^"), false)),
+                    Boundary::String => Some(Expression::Part(String::from(r"\A"), false)),
                 }
-                Boundary::Line => Some(Expression::Part(String::from("(?m)^"), false)),
-                Boundary::String => Some(Expression::Part(String::from(r"\A"), false)),
+            } else {
+                None
             }
         } else {
             None
         };
-        let rb = if let Some(b) = &self.right {
-            match b {
-                Boundary::Word => {
-                    if phrase.len() > 0 {
-                        let c = phrase.chars().last().unwrap().to_string();
-                        let is_boundary = self.flags.unicode && UNICODE_B.is_match(&c)
-                            || !self.flags.unicode && ASCII_B.is_match(&c);
-                        if is_boundary {
-                            Some(Expression::Part(String::from(r"\b"), false))
+        let rb = if right {
+            if let Some(b) = &self.right {
+                match b {
+                    Boundary::Word => {
+                        if phrase.len() > 0 {
+                            let c = phrase.chars().last().unwrap().to_string();
+                            let is_boundary = self.flags.unicode && UNICODE_B.is_match(&c)
+                                || !self.flags.unicode && ASCII_B.is_match(&c);
+                            if is_boundary {
+                                Some(Expression::Part(String::from(r"\b"), false))
+                            } else {
+                                None
+                            }
                         } else {
                             None
                         }
-                    } else {
-                        None
                     }
+                    Boundary::Line => Some(Expression::Part(String::from("$"), false)),
+                    Boundary::String => Some(Expression::Part(String::from(r"\z"), false)),
                 }
-                Boundary::Line => Some(Expression::Part(String::from("$"), false)),
-                Boundary::String => Some(Expression::Part(String::from(r"\z"), false)),
+            } else {
+                None
             }
         } else {
             None
@@ -484,6 +525,8 @@ impl Pidgin {
                     sequence: self.recursive_condense_sequence(&g.sequence),
                     name: g.name.clone(),
                     flags: g.flags.clone(),
+                    lower_limit: None,
+                    upper_limit: None,
                 };
                 Expression::Grammar(g, *b)
             }
@@ -500,8 +543,14 @@ impl Pidgin {
         }
     }
     // initialize
-    fn digest(&self, s: &str, symbols: &BTreeMap<Symbol, Expression>) -> Vec<Expression> {
-        let mut rv = self.add_boundary_symbols(s);
+    fn digest(
+        &self,
+        left: bool,
+        right: bool,
+        s: &str,
+        symbols: &BTreeMap<Symbol, Expression>,
+    ) -> Vec<Expression> {
+        let mut rv = vec![Expression::Raw(s.to_string())];
         // apply the symbols to the strings
         for (sym, replacement) in symbols.iter() {
             let mut nv = Vec::new();
@@ -546,6 +595,28 @@ impl Pidgin {
             }
             rv = nv;
         }
+        if left && self.left.is_some() {
+            let first = rv.remove(0);
+            if let Expression::Raw(s) = first {
+                let mut nv = self.add_boundary_symbols(true, false, &s);
+                while nv.len() > 0 {
+                    let e = nv.pop().unwrap();
+                    rv.insert(0, e);
+                }
+            } else {
+                rv.insert(0, first);
+            }
+        }
+        if right && self.right.is_some() {
+            let last = rv.pop().unwrap();
+            if let Expression::Raw(s) = last {
+                for e in self.add_boundary_symbols(false, true, &s) {
+                    rv.push(e);
+                }
+            } else {
+                rv.push(last);
+            }
+        }
         // convert any remaining raw expressions to sequences of characters
         let mut nv = Vec::new();
         for e in rv {
@@ -559,7 +630,7 @@ impl Pidgin {
         }
         nv
     }
-    fn init(&self) -> Vec<Vec<Expression>> {
+    fn init(&self, left: bool, right: bool) -> Vec<Vec<Expression>> {
         let mut symbols: BTreeMap<Symbol, Expression> = BTreeMap::new();
         for (sym, v) in self.symbols.iter() {
             let mut v = if v.len() > 1 {
@@ -596,6 +667,8 @@ impl Pidgin {
                         name,
                         flags: self.flags.clone(),
                         sequence: vec![Expression::Alternation(v, false)],
+                        lower_limit: None,
+                        upper_limit: None,
                     },
                     false,
                 )
@@ -604,7 +677,7 @@ impl Pidgin {
         }
         self.phrases
             .iter()
-            .map(|s| self.digest(s, &symbols))
+            .map(|s| self.digest(left, right, s, &symbols))
             .collect()
     }
     fn condense(&self, mut phrase: Vec<Expression>) -> Vec<Expression> {
@@ -904,4 +977,16 @@ impl Pidgin {
         }
         v
     }
+}
+
+///
+pub enum RuleFragment {
+    S(String),
+    G(Grammar),
+}
+pub fn sf(string: &str) -> RuleFragment {
+    RuleFragment::S(string.to_string())
+}
+pub fn gf(g: Grammar) -> RuleFragment {
+    RuleFragment::G(g)
 }

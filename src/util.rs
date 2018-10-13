@@ -324,7 +324,7 @@ impl Expression {
                 .join(""),
             Expression::Grammar(g, _) => {
                 if describing && g.name.is_some() {
-                    format!("{{{}}}", g.name.as_ref().unwrap())
+                    format!("{{{}}}{}", g.name.as_ref().unwrap(), g.repetition_suffix())
                 } else {
                     g.to_s(context, describing, top)
                 }
