@@ -13,7 +13,7 @@ use util::{is_atomic, Expression, Flags};
 
 #[derive(Clone, Debug)]
 pub struct Grammar {
-    pub(crate) name: Option<String>,
+    pub name: Option<String>,
     pub(crate) sequence: Vec<Expression>,
     pub(crate) flags: Flags,
     pub(crate) lower_limit: Option<usize>,
@@ -21,6 +21,30 @@ pub struct Grammar {
 }
 
 impl Grammar {
+    /// Assigns a name to the grammar.
+    ///
+    /// This will have no effect on any uses of the grammar already used in
+    /// rules.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use pidgin::Pidgin;
+    /// let mut p = Pidgin::new();
+    /// let g = p.grammar(&vec!["foo", "bar", "baz"]);
+    /// p.rule("foo", &g);
+    /// let mut g = p.grammar(&vec!["foo cat", "foo dog"]);
+    /// print!("{}", g);
+    /// // TOP := {foo} (?:cat|dog)
+    /// // foo := foo|ba[rz]
+    /// g.name("Bartholemew");
+    /// print!("{}", g);
+    /// // Bartholemew := {foo} (?:cat|dog)
+    /// //         foo := foo|ba[rz]
+    /// ```
+    pub fn name(&mut self, name: &str) {
+        self.name = Some(name.to_string());
+    }
     /// Compiles a `Matcher` based on the `Grammar`'s rules.
     ///
     /// # Errors
@@ -293,7 +317,14 @@ impl Grammar {
         if flags.len() > 0 {
             flags = format!("(?{})", flags);
         }
-        let mut rules = vec![(String::from("TOP"), flags, g._describe())];
+        let mut rules = vec![(
+            self.name
+                .as_ref()
+                .unwrap_or(&String::from("TOP"))
+                .to_string(),
+            flags,
+            g._describe(),
+        )];
         let mut seen: BTreeSet<String> = BTreeSet::new();
         let mut queue = VecDeque::new();
         for r in self.rules() {
@@ -354,9 +385,10 @@ impl Grammar {
         g
     }
     fn _describe(&self) -> String {
+        let top = self.sequence.len() == 1;
         self.sequence
             .iter()
-            .map(|e| e.to_s(&self.flags, true, true))
+            .map(|e| e.to_s(&self.flags, true, top))
             .collect::<Vec<_>>()
             .join("")
     }

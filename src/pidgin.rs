@@ -236,6 +236,24 @@ impl Pidgin {
             Err(e) => Err(e),
         }
     }
+    /// Defines a rule using a vector of `RuleFragment`s. This facilitates the
+    /// insertion of rules with defined repetition limits.
+    ///
+    /// #Examples
+    ///
+    /// ```rust
+    /// # use pidgin::{gf, sf, Pidgin};
+    /// # use std::error::Error;
+    /// # fn demo() -> Result<(),Box<Error>> {
+    /// let mut p = Pidgin::new().word_bound().normalize_whitespace(true);
+    /// let animal = p.grammar(&vec!["cat", "cow", "camel", "mongoose"]);
+    /// p.rule("animal", &animal);
+    /// let animal_space = p.add_str("animal ").compile();
+    /// p.build_rule("animal_proof", vec![gf(animal_space.reps_min(1)?), sf("QED")]);
+    /// let m = p.add_str("animal_proof").matcher()?;
+    /// assert!(m.is_match("camel  camel   cat cow mongoose    QED"));
+    /// # Ok(())}
+    /// ```
     pub fn build_rule(&mut self, name: &str, components: Vec<RuleFragment>) {
         let right_limit = components.len() - 1;
         let g = Grammar {
@@ -322,7 +340,7 @@ impl Pidgin {
         self.flags.enclosed = case;
         self
     }
-    /// Toggles the U flag of Rust regexen. Per the documentation, U "swap[s] the
+    /// Toggles the U flag of Rust regexen. Per the documentation, U "swap\[s\] the
     /// meaning of x* and x*?", thus turning a stingy match greedy and a greedy
     /// match stingy.
     ///
@@ -979,14 +997,24 @@ impl Pidgin {
     }
 }
 
-///
+/// A small enum needed by `Pidgin::build_rule`.
 pub enum RuleFragment {
     S(String),
     G(Grammar),
 }
+
+/// Constructs a `RuleFragment::S`.
+///
+/// The name is short for "string fragment". This is just a way to construct a
+/// string `RuleFragment` in fewer keystrokes.
 pub fn sf(string: &str) -> RuleFragment {
     RuleFragment::S(string.to_string())
 }
+
+/// Constructs a `RuleFragment::G`.
+///
+/// The name is short for "grammar fragment". This is just a way to construct a
+/// grammar `RuleFragment` in fewer keystrokes.
 pub fn gf(g: Grammar) -> RuleFragment {
     RuleFragment::G(g)
 }

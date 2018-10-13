@@ -181,17 +181,6 @@ cannot produce a recursive grammar in Pidgin. Something like this is impossible:
 ```
 XP -> XP conj XP
 ```
-### Unbounded Repetition
-Currently you can produce something like this
-```
-foo -> bar{1,3}
-```
-but not
-```
-foo -> bar+
-```
-I am planning to introduce Pidgin macros which will allow this, but I am not
-sure when those will arrive.
 
 ### Order of Definition
 Typically a grammar is defined top down like so:
@@ -203,7 +192,7 @@ baz   -> '1' | '2'
 plugh -> 'cat' | 'dog'
 xyzzy -> 'green' | 'blue' | 'grue'
 ```
-Because in Pidgin sub-grammars need to be defned before they can be used in the
+Because in Pidgin sub-grammars need to be defined before they can be used in the
 definition of other rules, construction has to go bottom up.
 
 I am planning to write Pidgin macros which will allow one to define a grammar
@@ -264,7 +253,7 @@ which clears both.
 The `clear` method does not clear any flags you have set. If you want that as
 well, you're better off just building a fresh Pidgin.
 
-## Effect on Matching Efficiency
+## Benchmarks
 
 The principle motivation behind Pidgin is simply to produce something like an
 abstract syntax tree one can use to better understand matched text, but the

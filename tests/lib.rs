@@ -439,6 +439,22 @@ fn reverse_greed() {
 }
 
 #[test]
+fn build_rule() {
+    let mut p = Pidgin::new().word_bound().normalize_whitespace(true);
+    let animal = p.grammar(&vec!["cat", "cow", "camel", "mongoose"]);
+    p.rule("animal", &animal);
+    let animal_space = p.add_str("animal ").compile();
+    p.build_rule(
+        "animal_proof",
+        vec![gf(animal_space.reps_min(1).unwrap()), sf("QED")],
+    );
+    let m = p.add_str("animal_proof").matcher().unwrap();
+    assert!(m.is_match("camel QED"));
+    assert!(m.is_match("camel  camel   cat cow mongoose    QED"));
+    assert!(!m.is_match("scamel QED"));
+}
+
+#[test]
 fn reps() {
     let mut p = Pidgin::new();
     let g = p.grammar(&vec!["foo", "bar", "baz"]);
@@ -648,4 +664,22 @@ fn boundaries_only_on_leaves() {
     assert!(!m.is_match("bfoo"), "bfoo");
     assert!(!m.is_match("bbaz"), "bbaz");
     assert!(m.is_match("b@bar"), "b@bar");
+    assert!(!m.is_match("camel QEDs"));
+}
+
+#[test]
+fn name_grammar() {
+    let mut p = Pidgin::new();
+    let g = p.grammar(&vec!["foo", "bar", "baz"]);
+    p.rule("foo", &g);
+    let mut g = p.grammar(&vec!["foo cat", "foo dog"]);
+    assert_eq!(
+        format!("{}", g),
+        "TOP := {foo} (?:cat|dog)\nfoo := foo|ba[rz]\n"
+    );
+    g.name("Bartholemew");
+    assert_eq!(
+        format!("{}", g),
+        "Bartholemew := {foo} (?:cat|dog)\n        foo := foo|ba[rz]\n"
+    );
 }
