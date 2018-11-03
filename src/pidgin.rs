@@ -901,7 +901,7 @@ impl Pidgin {
         }
         let suffix = if len == 0 {
             if inverted {
-                for mut v in phrases {
+                for v in phrases {
                     v.reverse();
                 }
             }

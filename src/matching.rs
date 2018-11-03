@@ -128,9 +128,9 @@ impl Matcher {
                 }
             }
             Expression::Grammar(g, _) => {
-                let new_name = format!("m{}", idx);
-                *idx += 1;
                 if let Some(n) = g.name.clone() {
+                    let new_name = format!("m{}", idx);
+                    *idx += 1;
                     translation.insert(new_name.clone(), n);
                     parentage
                         .entry(parent.to_string())
@@ -142,7 +142,7 @@ impl Matcher {
                     g.name = Some(new_name.clone());
                 } else {
                     for ref mut e in &mut g.sequence {
-                        Matcher::walk(idx, &new_name, e, translation, parentage);
+                        Matcher::walk(idx, parent, e, translation, parentage);
                     }
                 }
             }
