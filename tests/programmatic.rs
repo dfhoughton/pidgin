@@ -405,7 +405,6 @@ fn description() {
     let g = p.grammar(&vec!["xyzzy", "qux"]);
     p.rule("plugh", &g);
     let g = p.grammar(&vec!["foo", "plugh"]);
-    println!("{}", g.describe());
     assert_eq!(
         "  TOP :=      {foo}|{plugh}\n  foo :=      ba[rz]\nplugh :=      qux|{xyzzy}\nxyzzy := (?i) p[aio]ng\n",
         g.describe()
@@ -424,7 +423,6 @@ fn grammar_format() {
     let g = p.grammar(&vec!["xyzzy", "qux"]);
     p.rule("plugh", &g);
     let g = p.grammar(&vec!["foo", "plugh"]);
-    println!("{}", g.describe());
     assert_eq!(
         "  TOP :=      {foo}|{plugh}\n  foo :=      ba[rz]\nplugh :=      qux|{xyzzy}\nxyzzy := (?i) p[aio]ng\n",
         format!("{}", g)
@@ -682,4 +680,25 @@ fn name_grammar() {
         format!("{}", g),
         "Bartholemew := {foo} (?:cat|dog)\n        foo := foo|ba[rz]\n"
     );
+}
+
+#[test]
+fn has_test() {
+    let mut p = Pidgin::new();
+    let g = p.grammar(&vec!["cat", "dog", "camel"]);
+    p.rule("animal", &g);
+    let g = p.grammar(&vec!["carpet", "crate", "cartoon"]);
+    p.rule("thing", &g);
+    let m = p.grammar(&vec!["animal", "thing"]).matcher().unwrap();
+    assert!(m.parse("cat").unwrap().has("animal"));
+}
+
+#[test]
+fn funky_chicken() {
+    let mut p = Pidgin::new();
+    let g = p.grammar(&vec!["foo", "bar"]);
+    p.rx_rule(r"\s+", &g, Some("whitespace_is_weird")).unwrap();
+    let m = p.grammar(&vec!["FUNKY CHICKEN"]).matcher().unwrap();
+    let mtch = m.parse("FUNKYfooCHICKEN").unwrap();
+    assert!(mtch.has("whitespace_is_weird"));
 }

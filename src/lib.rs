@@ -11,7 +11,7 @@ used by adding `pidgin` to your dependencies in your project's `Cargo.toml`.
 
 ```toml
 [dependencies]
-pidgin = "0.1.5"
+pidgin = "0.1.6"
 ```
 
 and this to your crate root:
@@ -181,9 +181,11 @@ extern crate regex;
 extern crate lazy_static;
 
 mod grammar;
+#[macro_use]
+pub mod macros;
 mod matching;
 mod pidgin;
 mod util;
-pub use grammar::Grammar;
-pub use matching::{Match, Matcher};
-pub use pidgin::{gf, sf, Pidgin, RuleFragment};
+pub use self::grammar::Grammar;
+pub use self::matching::{Match, Matcher};
+pub use self::pidgin::{gf, sf, Pidgin, RuleFragment};

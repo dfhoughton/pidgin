@@ -1,10 +1,12 @@
 extern crate regex;
-use grammar::Grammar;
-use matching::Matcher;
+use crate::grammar::Grammar;
+use crate::matching::Matcher;
+use crate::util::{
+    character_class_escape, is_atomic, Boundary, CharRange, Expression, Flags, Symbol,
+};
 use regex::{Error, Regex};
 use std::cmp::{Ord, Ordering};
 use std::collections::{BTreeMap, BTreeSet};
-use util::{character_class_escape, is_atomic, Boundary, CharRange, Expression, Flags, Symbol};
 
 /// This is a grammar builder. It keeps track of the rules defined, the
 /// alternates participating in the rule currently being defined, whether these
@@ -78,10 +80,10 @@ impl Pidgin {
     /// Compiles the current rule, clearing the alternate list in preparation
     /// for constructing the next rule.
     pub fn compile(&mut self) -> Grammar {
-        self.compile_bounded(true, true)
+        self.compile_bounded(true, true, true)
     }
-    pub fn compile_bounded(&mut self, left: bool, right: bool) -> Grammar {
-        let mut phrases = self.init(left, right);
+    pub fn compile_bounded(&mut self, left: bool, right: bool, apply_symbols: bool) -> Grammar {
+        let mut phrases = self.init(left, right, apply_symbols);
         phrases.sort();
         phrases.dedup();
         let sequence = self.recursive_compile(phrases.as_mut());
@@ -116,13 +118,19 @@ impl Pidgin {
     /// argument defines the rule. The `name` argument
     /// provides the optional name for the rule.
     ///
+    /// For an example of its practical use, the `normalize_whitespace` method
+    /// is implemented via `foreign_rx_rule`.
+    ///
     /// ```rust
     /// # use pidgin::Pidgin;
     /// # use std::error::Error;
     /// # fn demo() -> Result<(),Box<Error>> {
-    /// # let mut pidgin = Pidgin::new();
-    /// # let g = pidgin.grammar(&vec!["foo","bar"]);
-    /// pidgin.rx_rule(r"\s+", &g, Some("whitespace_is_special"))?;
+    /// let mut p = Pidgin::new();
+    /// let g = p.grammar(&vec!["foo", "bar"]);
+    /// p.rx_rule(r"\s+", &g, Some("whitespace_is_weird"))?;
+    /// let m = p.grammar(&vec!["FUNKY CHICKEN"]).matcher()?;
+    /// let mtch = m.parse("FUNKYfooCHICKEN").unwrap();
+    /// assert!(mtch.has("whitespace_is_weird"));
     /// # Ok(())
     /// # }
     /// ```
@@ -269,7 +277,10 @@ impl Pidgin {
                     RuleFragment::S(s) => {
                         self.phrases.clear();
                         self.phrases.push(s.clone());
-                        Expression::Grammar(self.compile_bounded(i == 0, i == right_limit), false)
+                        Expression::Grammar(
+                            self.compile_bounded(i == 0, i == right_limit, false),
+                            false,
+                        )
                     }
                 })
                 .collect(),
@@ -565,53 +576,58 @@ impl Pidgin {
         &self,
         left: bool,
         right: bool,
+        apply_symbols: bool,
         s: &str,
         symbols: &BTreeMap<Symbol, Expression>,
     ) -> Vec<Expression> {
         let mut rv = vec![Expression::Raw(s.to_string())];
-        // apply the symbols to the strings
-        for (sym, replacement) in symbols.iter() {
-            let mut nv = Vec::new();
-            for e in rv {
-                if let Expression::Raw(s) = e {
-                    match sym {
-                        Symbol::S(name) => {
-                            if s.contains(name) {
-                                for (i, s) in s.split(name).enumerate() {
-                                    if i > 0 {
+        if apply_symbols {
+            // apply the symbols to the strings
+            for (sym, replacement) in symbols.iter() {
+                let mut nv = Vec::new();
+                for e in rv {
+                    if let Expression::Raw(s) = e {
+                        match sym {
+                            Symbol::S(name) => {
+                                if s.contains(name) {
+                                    for (i, s) in s.split(name).enumerate() {
+                                        if i > 0 {
+                                            nv.push(replacement.clone());
+                                        }
+                                        if s.len() > 0 {
+                                            nv.push(Expression::Raw(s.to_string()))
+                                        }
+                                    }
+                                } else {
+                                    nv.push(Expression::Raw(s));
+                                }
+                            }
+                            Symbol::Rx(rx) => {
+                                if rx.is_match(s.as_str()) {
+                                    let mut offset = 0;
+                                    for m in rx.find_iter(&s) {
+                                        if m.start() > offset {
+                                            nv.push(Expression::Raw(
+                                                s[offset..m.start()].to_string(),
+                                            ));
+                                        }
                                         nv.push(replacement.clone());
+                                        offset = m.end();
                                     }
-                                    if s.len() > 0 {
-                                        nv.push(Expression::Raw(s.to_string()))
+                                    if offset < s.len() {
+                                        nv.push(Expression::Raw(s[offset..s.len()].to_string()));
                                     }
+                                } else {
+                                    nv.push(Expression::Raw(s));
                                 }
-                            } else {
-                                nv.push(Expression::Raw(s));
                             }
                         }
-                        Symbol::Rx(rx) => {
-                            if rx.is_match(s.as_str()) {
-                                let mut offset = 0;
-                                for m in rx.find_iter(&s) {
-                                    if m.start() > offset {
-                                        nv.push(Expression::Raw(s[offset..m.start()].to_string()));
-                                    }
-                                    nv.push(replacement.clone());
-                                    offset = m.end();
-                                }
-                                if offset < s.len() {
-                                    nv.push(Expression::Raw(s[offset..s.len()].to_string()));
-                                }
-                            } else {
-                                nv.push(Expression::Raw(s));
-                            }
-                        }
+                    } else {
+                        nv.push(e)
                     }
-                } else {
-                    nv.push(e)
                 }
+                rv = nv;
             }
-            rv = nv;
         }
         if left && self.left.is_some() {
             let first = rv.remove(0);
@@ -648,7 +664,7 @@ impl Pidgin {
         }
         nv
     }
-    fn init(&self, left: bool, right: bool) -> Vec<Vec<Expression>> {
+    fn init(&self, left: bool, right: bool, apply_symbols: bool) -> Vec<Vec<Expression>> {
         let mut symbols: BTreeMap<Symbol, Expression> = BTreeMap::new();
         for (sym, v) in self.symbols.iter() {
             let mut v = if v.len() > 1 {
@@ -695,7 +711,7 @@ impl Pidgin {
         }
         self.phrases
             .iter()
-            .map(|s| self.digest(left, right, s, &symbols))
+            .map(|s| self.digest(left, right, apply_symbols, s, &symbols))
             .collect()
     }
     fn condense(&self, mut phrase: Vec<Expression>) -> Vec<Expression> {
@@ -998,6 +1014,7 @@ impl Pidgin {
 }
 
 /// A small enum needed by `Pidgin::build_rule`.
+#[derive(Debug)]
 pub enum RuleFragment {
     S(String),
     G(Grammar),

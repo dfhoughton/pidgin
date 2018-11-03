@@ -1,8 +1,8 @@
 extern crate regex;
-use grammar::Grammar;
+use crate::grammar::Grammar;
+use crate::util::{Expression, Flags};
 use regex::{Captures, Error, Regex};
 use std::collections::HashMap;
-use util::{Expression, Flags};
 
 /// This is functionally equivalent to a `Regex`: you can use it repeatedly to
 /// search a string. It cannot itself be used directly to split strings, but
@@ -34,9 +34,29 @@ impl Matcher {
                     children: None,
                 };
                 self.build_tree(&mut m, &self.root, s, &captures);
+                let m = self.simplify_tree(m);
                 Some(m)
             }
             None => None,
+        }
+    }
+    fn simplify_tree<'t>(&self, m: Match<'t>) -> Match<'t> {
+        if m.children.is_some() {
+            let mut clone = m.clone();
+            let children: Vec<Match> = m
+                .children
+                .unwrap()
+                .into_iter()
+                .map(|c| self.simplify_tree(c))
+                .collect();
+            if children.len() == 1 && m.rule == children[0].rule {
+                children[0].clone()
+            } else {
+                clone.children = Some(children);
+                clone
+            }
+        } else {
+            m
         }
     }
     /// Returns whether the grammar can parse the string. This is a cheaper
@@ -68,18 +88,10 @@ impl Matcher {
         let mut translation = HashMap::new();
         let mut parentage = HashMap::new();
         let root = g.name.clone().unwrap_or(String::from("0"));
-        // parentage.entry(root.clone()).or_insert(Vec::new());
         let mut g = g.clone();
         g.name = Some(root.clone());
         let mut g = Expression::Grammar(g.clone(), false);
-        Matcher::walk(
-            &mut idx,
-            &root,
-            &mut g,
-            &mut translation,
-            &mut parentage,
-            true,
-        );
+        Matcher::walk(&mut idx, &root, &mut g, &mut translation, &mut parentage);
         if let Expression::Grammar(g, _) = g {
             match Regex::new(&g.to_s(&Flags::defaults(), false, false)) {
                 Ok(rx) => Ok(Matcher {
@@ -91,7 +103,7 @@ impl Matcher {
                 Err(e) => Err(e),
             }
         } else {
-            panic!("there has to be a better way to fool the borrow checker")
+            unreachable!()
         }
     }
     fn walk(
@@ -100,44 +112,38 @@ impl Matcher {
         e: &mut Expression,
         translation: &mut HashMap<String, String>,
         parentage: &mut HashMap<String, Vec<String>>,
-        inserting: bool,
     ) {
         match e {
             Expression::Sequence(v, _) => {
                 for e in v {
-                    Matcher::walk(idx, parent, e, translation, parentage, inserting);
+                    Matcher::walk(idx, parent, e, translation, parentage);
                 }
             }
             Expression::Repetition(e, _, _) => {
-                Matcher::walk(idx, parent, e, translation, parentage, inserting)
+                Matcher::walk(idx, parent, e, translation, parentage)
             }
             Expression::Alternation(v, _) => {
                 for e in v {
-                    Matcher::walk(idx, parent, e, translation, parentage, inserting);
+                    Matcher::walk(idx, parent, e, translation, parentage);
                 }
             }
             Expression::Grammar(g, _) => {
                 let new_name = format!("m{}", idx);
                 *idx += 1;
-                let mut inserting = inserting;
-                if inserting {
-                    if let Some(n) = g.name.clone() {
-                        translation.insert(new_name.clone(), n);
-                        parentage
-                            .entry(parent.to_string())
-                            .or_insert_with(|| Vec::new())
-                            .push(new_name.clone());
-                    } else {
-                        inserting = false;
+                if let Some(n) = g.name.clone() {
+                    translation.insert(new_name.clone(), n);
+                    parentage
+                        .entry(parent.to_string())
+                        .or_insert_with(|| Vec::new())
+                        .push(new_name.clone());
+                    for e in &mut g.sequence {
+                        Matcher::walk(idx, &new_name, &mut *e, translation, parentage);
                     }
-                    g.name = if inserting {
-                        Some(new_name.clone())
-                    } else {
-                        None
+                    g.name = Some(new_name.clone());
+                } else {
+                    for ref mut e in &mut g.sequence {
+                        Matcher::walk(idx, &new_name, e, translation, parentage);
                     }
-                }
-                for ref mut e in &mut g.sequence {
-                    Matcher::walk(idx, &new_name, e, translation, parentage, inserting);
                 }
             }
             _ => (),
@@ -152,7 +158,7 @@ impl Matcher {
 ///
 /// The lifetime parameter `'t` represents the lifetime of the `&str` matched
 /// against.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Match<'t> {
     rule: String,
     text: &'t str,
@@ -209,6 +215,30 @@ impl<'t> Match<'t> {
         self.collect(name, &mut v);
         v
     }
+    /// Returns whether the given rule matched for any node in the parse tree.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use pidgin::Pidgin; use std::error::Error;
+    /// # fn demo() -> Result<(), Box<Error>> {
+    /// let mut p = Pidgin::new();
+    /// let g = p.grammar(&vec!["cat", "dog", "camel"]);
+    /// p.rule("animal", &g);
+    /// let g = p.grammar(&vec!["carpet", "crate", "cartoon"]);
+    /// p.rule("thing", &g);
+    /// let m = p.grammar(&vec!["animal", "thing"]).matcher()?;
+    /// assert!(m.parse("cat").unwrap().has("animal"));
+    /// # Ok(())}
+    /// ```
+    pub fn has(&self, name: &str) -> bool {
+        self.rule == name || self.children.is_some() && self
+            .children
+            .as_ref()
+            .unwrap()
+            .iter()
+            .any(|ref m| m.has(name))
+    }
     fn collect(&'t self, name: &str, names: &mut Vec<&'t Match<'t>>) {
         if self.rule == name {
             names.push(self);
@@ -218,5 +248,31 @@ impl<'t> Match<'t> {
                 m.collect(name, names);
             }
         }
+    }
+    // display the parse tree with indentation
+    fn _fmt(&self, depth: usize, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let own = format!(
+            "{}{} ({}, {}): {}\n",
+            "  ".repeat(depth),
+            self.rule,
+            self.start,
+            self.end,
+            format!("{:?}", self.as_str())
+        );
+        if let Some(ref children) = &self.children {
+            let mut r = write!(f, "{}", own);
+            for c in children {
+                r = c._fmt(depth + 1, f);
+            }
+            r
+        } else {
+            write!(f, "{}", own)
+        }
+    }
+}
+
+impl<'t> std::fmt::Display for Match<'t> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self._fmt(0, f)
     }
 }

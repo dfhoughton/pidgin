@@ -1,9 +1,9 @@
-use matching::Matcher;
+use crate::matching::Matcher;
+use crate::util::{is_atomic, Expression, Flags};
 use regex::Error;
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::{BTreeSet, VecDeque};
 use std::fmt;
-use util::{is_atomic, Expression, Flags};
 
 /// A compiled collection of rules ready for the building of a
 /// `pidgin::Matcher` or for use in the definition of a new rule.
@@ -13,6 +13,7 @@ use util::{is_atomic, Expression, Flags};
 
 #[derive(Clone, Debug)]
 pub struct Grammar {
+    ///
     pub name: Option<String>,
     pub(crate) sequence: Vec<Expression>,
     pub(crate) flags: Flags,
@@ -23,7 +24,7 @@ pub struct Grammar {
 impl Grammar {
     /// Assigns a name to the grammar.
     ///
-    /// This will have no effect on any uses of the grammar already used in
+    /// This will have no effect on any uses of the grammar already in
     /// rules.
     ///
     /// # Examples

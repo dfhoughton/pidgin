@@ -1,11 +1,11 @@
 extern crate regex;
-use grammar::Grammar;
+use crate::grammar::Grammar;
 use regex::{escape, Regex};
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 
 #[cfg(test)]
 mod tests {
-    use util::is_atomic;
+    use crate::util::is_atomic;
     #[test]
     fn single_characters_are_atomic() {
         for c in String::from("abc.").chars() {
@@ -208,7 +208,7 @@ pub(crate) enum CharRange {
 #[derive(Clone, Debug)]
 pub(crate) enum Symbol {
     S(String), // String is name; bool is whether to capture this group
-    Rx(Regex), // Option<String> is an optional name
+    Rx(Regex), //
 }
 
 impl PartialOrd for Symbol {
@@ -309,7 +309,7 @@ impl Expression {
                 }
             }
             Expression::Repetition(e, n, _) => {
-                let mut s = e.to_s(context, describing, false);
+                let s = e.to_s(context, describing, false);
                 let reps = format!("{{{}}}", n);
                 if is_atomic(&s) {
                     s + reps.as_str()
