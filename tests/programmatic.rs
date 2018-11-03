@@ -702,3 +702,14 @@ fn funky_chicken() {
     let mtch = m.parse("FUNKYfooCHICKEN").unwrap();
     assert!(mtch.has("whitespace_is_weird"));
 }
+
+#[test]
+fn stinginess() {
+    let mut p = Pidgin::new();
+    let g = p.grammar(&vec!["foo"]);
+    p.build_rule("foo", vec![gf(g.reps_min(1).unwrap().stingy(true))]);
+    let g = p.add_str("foo").compile();
+    let m = g.matcher().unwrap();
+    let t = m.parse("foofoo").unwrap();
+    assert_eq!(t.as_str(), "foo");
+}

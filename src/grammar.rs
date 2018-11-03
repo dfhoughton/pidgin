@@ -17,6 +17,7 @@ pub struct Grammar {
     pub name: Option<String>,
     pub(crate) sequence: Vec<Expression>,
     pub(crate) flags: Flags,
+    pub(crate) stingy: bool,
     pub(crate) lower_limit: Option<usize>,
     pub(crate) upper_limit: Option<usize>,
 }
@@ -122,6 +123,7 @@ impl Grammar {
                 sequence: self.sequence.clone(),
                 lower_limit: Some(r),
                 upper_limit: self.upper_limit.clone(),
+                stingy: self.stingy,
             })
         } else {
             Err(format!(
@@ -173,6 +175,7 @@ impl Grammar {
                     sequence: self.sequence.clone(),
                     lower_limit: self.lower_limit.clone(),
                     upper_limit: Some(r),
+                    stingy: self.stingy,
                 })
             }
         } else {
@@ -182,6 +185,29 @@ impl Grammar {
                 r
             ))
         }
+    }
+    /// Sets whether the *grammar's* repetition suffix, if any, has the `?`
+    /// modifier. This has no effect on repetition suffixes created during the
+    /// ingestion of phrases.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use pidgin::{Pidgin, sf, gf};
+    /// # use std::error::Error;
+    /// # fn dem() -> Result<(),Box<Error>> {
+    /// let mut p = Pidgin::new();
+    /// let g = p.grammar(&vec!["foo"]);
+    /// p.build_rule("foo", vec![gf(g.reps_min(1)?.stingy(true))]);
+    /// let g = p.add_str("foo").compile();
+    /// let m = g.matcher()?;
+    /// let t = m.parse("foofoo").unwrap();
+    /// assert_eq!(t.as_str(), "foo");
+    /// # Ok(()) }
+    /// ```
+    pub fn stingy(mut self, stingy: bool) -> Grammar {
+        self.stingy = stingy;
+        self
     }
     /// Sets the minimum number of repetitions of the grammar in the string
     /// matched against to `min` and the maximum to `max`. If no minimum is set,
@@ -226,6 +252,7 @@ impl Grammar {
                     sequence: self.sequence.clone(),
                     lower_limit: Some(min),
                     upper_limit: Some(max),
+                    stingy: self.stingy,
                 })
             }
         } else {
@@ -242,31 +269,32 @@ impl Grammar {
             && self.upper_limit.unwrap() == 1)
     }
     pub(crate) fn repetition_suffix(&self) -> String {
+        let stingy_modifier = if self.stingy { "?" } else { "" };
         if self.lower_limit.is_none() {
             if self.upper_limit.is_none() {
                 String::from("")
             } else {
                 let r = self.upper_limit.unwrap();
                 if r == 1 {
-                    String::from("?")
+                    format!("?{}", stingy_modifier)
                 } else {
-                    format!("{{0,{}}}", r)
+                    format!("{{0,{}}}{}", r, stingy_modifier)
                 }
             }
         } else if self.upper_limit.is_none() {
             let r = self.lower_limit.unwrap();
             match r {
-                0 => String::from("*"),
-                1 => String::from("+"),
-                _ => format!("{{{},}}", r),
+                0 => format!("*{}", stingy_modifier),
+                1 => format!("+{}", stingy_modifier),
+                _ => format!("{{{},}}{}", r, stingy_modifier),
             }
         } else {
             let min = self.lower_limit.unwrap();
             let max = self.upper_limit.unwrap();
             match min {
                 0 => match max {
-                    1 => String::from("?"),
-                    _ => format!("{{0,{}}}", max),
+                    1 => format!("?{}", stingy_modifier),
+                    _ => format!("{{0,{}}}{}", max, stingy_modifier),
                 },
                 _ => {
                     if min == max {
@@ -276,7 +304,7 @@ impl Grammar {
                             format!("{{{}}}", min)
                         }
                     } else {
-                        format!("{{{},{}}}", min, max)
+                        format!("{{{},{}}}{}", min, max, stingy_modifier)
                     }
                 }
             }
@@ -467,6 +495,7 @@ impl Grammar {
             flags: self.flags.clone(),
             upper_limit: self.upper_limit.clone(),
             lower_limit: self.lower_limit.clone(),
+            stingy: self.stingy,
         }
     }
     pub(crate) fn clear_name(&mut self) {

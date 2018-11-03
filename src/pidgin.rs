@@ -94,6 +94,7 @@ impl Pidgin {
             flags: self.flags.clone(),
             lower_limit: None,
             upper_limit: None,
+            stingy: false,
         }
     }
     /// A convenience method equivalent to `add(&words).compile()`.
@@ -185,6 +186,7 @@ impl Pidgin {
                             sequence: vec![Expression::Part(pattern.to_string(), false)],
                             lower_limit: None,
                             upper_limit: None,
+                            stingy: false,
                         },
                         false,
                     ),
@@ -236,6 +238,7 @@ impl Pidgin {
                         flags,
                         lower_limit: None,
                         upper_limit: None,
+                        stingy: false,
                     };
                     self.add_symbol(Symbol::Rx(rx), Expression::Grammar(g, false));
                     Ok(())
@@ -269,6 +272,7 @@ impl Pidgin {
             flags: self.flags.clone(),
             lower_limit: None,
             upper_limit: None,
+            stingy: false,
             sequence: components
                 .iter()
                 .enumerate()
@@ -449,6 +453,7 @@ impl Pidgin {
             flags: g.flags.clone(),
             lower_limit: None,
             upper_limit: None,
+            stingy: false,
         }
     }
     /// Convenience method for generating non-backtracking regular expressions.
@@ -556,6 +561,7 @@ impl Pidgin {
                     flags: g.flags.clone(),
                     lower_limit: None,
                     upper_limit: None,
+                    stingy: false,
                 };
                 Expression::Grammar(g, *b)
             }
@@ -703,6 +709,7 @@ impl Pidgin {
                         sequence: vec![Expression::Alternation(v, false)],
                         lower_limit: None,
                         upper_limit: None,
+                        stingy: false,
                     },
                     false,
                 )

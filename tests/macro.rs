@@ -339,3 +339,13 @@ fn maybe_space() {
     assert!(matcher.is_match("cat  a   log"));
     assert!(matcher.is_match("catalog"));
 }
+
+#[test]
+fn stingy() {
+    let g = grammar!{
+        foo => ("foo"){1,3}?
+    };
+    let matcher = g.matcher().unwrap();
+    let p = matcher.parse("foofoofoo").unwrap();
+    assert_eq!(p.as_str(), "foo");
+}

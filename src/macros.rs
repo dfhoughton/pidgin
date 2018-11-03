@@ -286,7 +286,7 @@ pub fn build_grammar(
                         g.clear_name();
                         RuleFragment::G(g)
                     }
-                    Part::V(v, low, high, _) => {
+                    Part::V(v, low, high, stingy) => {
                         // FIXME handle boundary stuff
                         let mut g = pidgin
                             .clone()
@@ -297,9 +297,12 @@ pub fn build_grammar(
                         if high.is_some() {
                             g = g.reps_max(high.unwrap()).unwrap();
                         }
+                        if *stingy {
+                            g = g.stingy(true);
+                        }
                         RuleFragment::G(g)
                     }
-                    Part::G(g, low, high, _) => {
+                    Part::G(g, low, high, stingy) => {
                         let mut g = compiled.get(g).unwrap().clone();
                         if low.is_some() {
                             g = g.reps_min(low.unwrap()).unwrap();
@@ -307,9 +310,12 @@ pub fn build_grammar(
                         if high.is_some() {
                             g = g.reps_max(high.unwrap()).unwrap();
                         }
+                        if *stingy {
+                            g = g.stingy(true);
+                        }
                         RuleFragment::G(g)
                     }
-                    Part::S(s, low, high, _) => {
+                    Part::S(s, low, high, stingy) => {
                         // FIXME handle boundary stuff
                         if !(low.is_some() || high.is_some()) {
                             RuleFragment::S(s.clone())
@@ -320,6 +326,9 @@ pub fn build_grammar(
                             }
                             if high.is_some() {
                                 g = g.reps_max(high.unwrap()).unwrap();
+                            }
+                            if *stingy {
+                                g = g.stingy(true);
                             }
                             RuleFragment::G(g)
                         }
