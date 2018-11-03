@@ -178,4 +178,60 @@ fn rule_specific_flags() {
     let p = matcher.parse("foobar").unwrap();
     assert_eq!(p.as_str(), "foobar");
     assert!(p.name("foo").is_some());
+    assert!(p.name("bar").is_some());
+    let p = matcher.parse("FOObar").unwrap();
+    assert_eq!(p.as_str(), "FOObar");
+    assert!(p.name("foo").is_some());
+    assert_eq!(p.name("foo").unwrap().as_str(), "FOO");
+    assert!(p.name("bar").is_some());
+    assert!(!matcher.is_match("fooBAR"));
+}
+
+#[test]
+fn rule_general_flags() {
+    let g = grammar!{
+        (?i)
+        TOP => <foo> <bar>
+        foo => ("foo")
+        bar => ("bar")
+    };
+    let matcher = g.matcher().unwrap();
+    let p = matcher.parse("foobar").unwrap();
+    assert_eq!(p.as_str(), "foobar");
+    assert!(p.name("foo").is_some());
+    assert!(p.name("bar").is_some());
+    let p = matcher.parse("FOObar").unwrap();
+    assert_eq!(p.as_str(), "FOObar");
+    assert!(p.name("foo").is_some());
+    assert_eq!(p.name("foo").unwrap().as_str(), "FOO");
+    assert!(p.name("bar").is_some());
+    let p = matcher.parse("fooBAR").unwrap();
+    assert_eq!(p.as_str(), "fooBAR");
+    assert!(p.name("foo").is_some());
+    assert_eq!(p.name("foo").unwrap().as_str(), "foo");
+    assert!(p.name("bar").is_some());
+    assert_eq!(p.name("bar").unwrap().as_str(), "BAR");
+}
+
+#[test]
+fn rule_general_and_specific_flags() {
+    let g = grammar!{
+        (?i)
+        TOP => <foo> <bar>
+        foo => ("foo")
+        bar => (?-i) ("bar")
+    };
+    let matcher = g.matcher().unwrap();
+    let p = matcher.parse("foobar").unwrap();
+    assert_eq!(p.as_str(), "foobar");
+    assert!(p.name("foo").is_some());
+    assert!(p.name("bar").is_some());
+    let p = matcher.parse("FOObar").unwrap();
+    assert_eq!(p.as_str(), "FOObar");
+    assert!(p.name("foo").is_some());
+    assert_eq!(p.name("foo").unwrap().as_str(), "FOO");
+    assert!(p.name("bar").is_some());
+    println!("g: {}", g);
+    println!("rx: {}", matcher.rx);
+    assert!(!matcher.is_match("fooBAR"));
 }

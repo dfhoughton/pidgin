@@ -495,36 +495,36 @@ impl Grammar {
         if self.flags.case_insensitive ^ context.case_insensitive {
             if self.flags.case_insensitive {
                 flags_on.push("i");
-            } else if self.flags.enclosed {
+            } else {
                 flags_off.push("i");
             }
         }
         if self.flags.multi_line ^ context.multi_line {
             if self.flags.multi_line {
                 flags_on.push("m");
-            } else if self.flags.enclosed {
+            } else {
                 flags_off.push("m");
             }
         }
         if self.flags.dot_all ^ context.dot_all {
             if self.flags.dot_all {
                 flags_on.push("s");
-            } else if self.flags.enclosed {
+            } else {
                 flags_off.push("s");
             }
         }
         if self.flags.unicode ^ context.unicode {
             if !self.flags.unicode {
                 flags_off.push("u");
-            } else if self.flags.enclosed {
+            } else {
                 flags_on.push("u");
             }
         }
         if self.flags.reverse_greed ^ context.reverse_greed {
-            if !self.flags.reverse_greed {
-                flags_off.push("U");
-            } else if self.flags.reverse_greed {
+            if self.flags.reverse_greed {
                 flags_on.push("U");
+            } else {
+                flags_off.push("U");
             }
         }
         let mut flags = String::new();
