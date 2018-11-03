@@ -235,3 +235,107 @@ fn rule_general_and_specific_flags() {
     println!("rx: {}", matcher.rx);
     assert!(!matcher.is_match("fooBAR"));
 }
+
+#[test]
+fn multiple_definitions() {
+    let g = grammar!{
+        foo => ("foo")
+        foo => ("bar")
+    };
+    let matcher = g.matcher().unwrap();
+    assert!(matcher.is_match("foo"));
+    assert!(matcher.is_match("bar"));
+}
+
+#[test]
+fn regex_rule() {
+    let g = grammar!{
+        foo => r(r"\d+")
+    };
+    let matcher = g.matcher().unwrap();
+    assert!(matcher.is_match("123"));
+}
+
+#[test]
+fn vec_rule_simple() {
+    let words = vec!["cat", "camel", "canteloupe"];
+    let g = grammar!{
+        foo => [&words]
+    };
+    let matcher = g.matcher().unwrap();
+    for w in words {
+        assert!(matcher.is_match(w));
+    }
+}
+
+#[test]
+fn vec_rule_with_repetition() {
+    let words = vec!["cat", "camel", "canteloupe"];
+    let g = grammar!{
+        foo => [&words]+
+    };
+    let matcher = g.matcher().unwrap();
+    for w in words {
+        let p = matcher.parse(w).unwrap();
+        assert_eq!(p.as_str(), w);
+        let t = &w.repeat(2);
+        let p = matcher.parse(t).unwrap();
+        assert_eq!(p.as_str(), t);
+        let t = &w.repeat(3);
+        let p = matcher.parse(t).unwrap();
+        assert_eq!(p.as_str(), t);
+    }
+    let t = "catcamelcanteloupe";
+    let p = matcher.parse(t).unwrap();
+    assert_eq!(p.as_str(), t);
+}
+
+#[test]
+fn word_bound_left() {
+    let words = vec!["cat", "@cat"];
+    let g = grammar!{
+        foo => (?b) [&words]
+    };
+    let matcher = g.matcher().unwrap();
+    assert!(matcher.is_match("cat"));
+    assert!(matcher.is_match("@cat"));
+    assert!(matcher.is_match("catatonia"));
+    assert!(matcher.is_match("a@cat"));
+    assert!(!matcher.is_match("scat"));
+}
+
+#[test]
+fn word_bound_right() {
+    let words = vec!["cat", "cat@"];
+    let g = grammar!{
+        foo => (?B) [&words]
+    };
+    let matcher = g.matcher().unwrap();
+    assert!(matcher.is_match("cat"));
+    assert!(matcher.is_match("cat@"));
+    assert!(matcher.is_match("scat"));
+    assert!(matcher.is_match("cat@s"));
+    assert!(!matcher.is_match("catatonia"));
+}
+
+#[test]
+fn some_space() {
+    let words = vec!["cat a log"];
+    let g = grammar!{
+        foo => (?w) [&words]
+    };
+    let matcher = g.matcher().unwrap();
+    assert!(matcher.is_match("cat  a   log"));
+    assert!(!matcher.is_match("catalog"));
+}
+
+#[test]
+fn maybe_space() {
+    let words = vec!["cat a log"];
+    let g = grammar!{
+        foo => (?W) [&words]
+    };
+    let matcher = g.matcher().unwrap();
+    assert!(matcher.is_match("cat  a   log"));
+    assert!(matcher.is_match("catalog"));
+}
