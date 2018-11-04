@@ -1,4 +1,5 @@
 #![feature(test)]
+#![recursion_limit="256"]
 #[macro_use]
 extern crate pidgin;
 
@@ -358,4 +359,73 @@ fn optional_space() {
     let matcher = g.matcher().unwrap();
     assert!(matcher.is_match("foobar"));
     assert!(matcher.is_match("foo bar"));
+}
+
+#[test]
+fn optional_space_with_repetition() {
+    let g = grammar!{
+        foo -> ("foo")+
+    };
+    let matcher = g.matcher().unwrap();
+    assert!(matcher.is_match("foofoo"));
+    assert!(matcher.is_match("foo foofoo foo"));
+}
+
+#[test]
+fn complex_example() {
+    let mdays = &(1..=31).into_iter().map( |i| i.to_string()).collect::<Vec<_>>();
+    let g = grammar!{
+        (?i)
+        // top rule -- each thing matched against is expected only to be a time expression
+        time -> r(r"\A") <type> r(r"\z")
+
+        // sub-rules
+        type           => <relative> | <absolute>
+        relative       -> <modifier> <unit> | <modifier> <period>
+        period         => <weekday> | <month>
+        absolute       => <month_day>
+        absolute       => <month_day> | <day_month_year> | <month_year>
+        absolute       => <month_day_year> | <year>
+        month_day      -> <month> <mday>
+        day_month_year -> <mday> <month> <year>
+        month_year     -> <month> <year>
+        month_day_year -> <month> <mday> (",") <year>
+
+        // leaves
+        mday     => (?bB) [&mdays.iter().map(|s| s.as_str()).collect::<Vec<_>>()]
+        modifier => (?bB) [&vec!["this", "last", "next"]]
+        unit     => (?bB) [&vec!["day", "week", "month", "year"]]
+        year     => r(r"\b\d{4}\b")
+        weekday  => (?bB) [&vec![
+                            "sunday",
+                            "monday",
+                            "tuesday",
+                            "wednesday",
+                            "thursday",
+                            "friday",
+                            "saturday"
+                          ]]
+        month    => (?bB) [&vec![
+                            "january",
+                            "february",
+                            "march",
+                            "april",
+                            "may",
+                            "june",
+                            "july",
+                            "august",
+                            "september",
+                            "october",
+                            "november",
+                            "december",
+                          ]]
+    };
+    let matcher = g.matcher().unwrap();
+    assert!(matcher.is_match("May 6, 1969"));
+    assert!(matcher.is_match("May 6"));
+    assert!(matcher.is_match("1969"));
+    assert!(matcher.is_match("last Saturday"));
+    let p = matcher.parse("May 6, 1969").unwrap();
+    assert!(p.name("absolute").is_some());
+    assert!(p.name("month").is_some());
 }
