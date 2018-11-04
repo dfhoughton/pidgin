@@ -1,5 +1,6 @@
 use crate::grammar::Grammar;
 use crate::pidgin::{Pidgin, RuleFragment};
+use crate::util::Expression;
 
 #[macro_export]
 macro_rules! grammar {
@@ -263,6 +264,7 @@ macro_rules! grammar {
     });
 }
 
+#[doc(hidden)]
 pub fn build_grammar(
     rules: Vec<String>,
     mut names_to_parts: std::collections::HashMap<String, Vec<(MacroFlags, Vec<Part>)>>,
@@ -276,21 +278,29 @@ pub fn build_grammar(
         let mut grammars = vec![];
         for (flags, parts) in alternates {
             let mut pidgin = flags.adjust(base_pidgin.clone());
+            let last_index = parts.len() - 1;
             let fragments = parts
                 .iter()
-                .map(|p| match p {
+                .enumerate()
+                .map(|(i, p)| match p {
                     Part::R(s) => {
                         let mut p = Pidgin::new();
                         p.foreign_rule("_", &s).expect(&format!("bad rx: {}", &s));
                         let mut g = p.add_str("_").compile();
                         g.clear_name();
+                        if flags.add_space && i != 0 {
+                            g = left_pad(g);
+                        }
                         RuleFragment::G(g)
                     }
                     Part::V(v, low, high, stingy) => {
-                        // FIXME handle boundary stuff
                         let mut g = pidgin
                             .clone()
-                            .grammar(&v.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+                            .add(&v.iter().map(|s| s.as_str()).collect::<Vec<_>>())
+                            .compile_bounded(i == 0, i == last_index, true);
+                        if flags.add_space && i != 0 {
+                            g = left_pad(g);
+                        }
                         if low.is_some() {
                             g = g.reps_min(low.unwrap()).unwrap();
                         }
@@ -304,6 +314,9 @@ pub fn build_grammar(
                     }
                     Part::G(g, low, high, stingy) => {
                         let mut g = compiled.get(g).unwrap().clone();
+                        if flags.add_space && i != 0 {
+                            g = left_pad(g);
+                        }
                         if low.is_some() {
                             g = g.reps_min(low.unwrap()).unwrap();
                         }
@@ -316,11 +329,17 @@ pub fn build_grammar(
                         RuleFragment::G(g)
                     }
                     Part::S(s, low, high, stingy) => {
-                        // FIXME handle boundary stuff
-                        if !(low.is_some() || high.is_some()) {
+                        if !(flags.add_space && i != 0 || low.is_some() || high.is_some()) {
                             RuleFragment::S(s.clone())
                         } else {
-                            let mut g = pidgin.clone().grammar(&vec![s.as_str()]);
+                            let mut g = pidgin.clone().add(&vec![s.as_str()]).compile_bounded(
+                                i == 0,
+                                i == last_index,
+                                false,
+                            );
+                            if flags.add_space && i != 0 {
+                                g = left_pad(g);
+                            }
                             if low.is_some() {
                                 g = g.reps_min(low.unwrap()).unwrap();
                             }
@@ -352,6 +371,22 @@ pub fn build_grammar(
     let mut g = compiled.remove(rules.first().expect("no rules")).unwrap();
     g.name(rules.first().unwrap());
     g
+}
+
+// add optional whitespace to the left of an element
+#[doc(hidden)]
+pub fn left_pad(g: Grammar) -> Grammar {
+    Grammar {
+        name: None,
+        flags: g.flags.clone(),
+        stingy: g.stingy,
+        lower_limit: None,
+        upper_limit: None,
+        sequence: vec![
+            Expression::Part(String::from(r"\s*"), false),
+            Expression::Grammar(g, false),
+        ],
+    }
 }
 
 #[derive(Debug)]

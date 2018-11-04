@@ -349,3 +349,13 @@ fn stingy() {
     let p = matcher.parse("foofoofoo").unwrap();
     assert_eq!(p.as_str(), "foo");
 }
+
+#[test]
+fn optional_space() {
+    let g = grammar!{
+        foo -> ("foo") ("bar")
+    };
+    let matcher = g.matcher().unwrap();
+    assert!(matcher.is_match("foobar"));
+    assert!(matcher.is_match("foo bar"));
+}
