@@ -122,6 +122,55 @@ macro_rules! grammar {
         grammar!(@add_grammar $l, $m, $e, None, None, false, $($parts)*)
     );
 
+    // general rule for adding a g(&foreign_grammar)
+    // repetition suffix is optional
+    ( @add_foreign_grammar $l:expr, $m:expr, $e:expr, $low:expr, $high:expr, $stingy:expr, $($parts:tt)* ) => (
+        grammar!(
+            @add_part
+            $l,
+            $m,
+            $crate::macros::Part::F($e.clone(), $low, $high, $stingy),
+            $($parts)*
+        )
+    );
+
+    ( @rules $l:expr, $m:expr, g($e:expr)?? $($parts:tt)* ) => (
+        grammar!(@add_foreign_grammar $l, $m, $e, None, Some(1), true, $($parts)*)
+    );
+    ( @rules $l:expr, $m:expr, g($e:expr)? $($parts:tt)* ) => (
+        grammar!(@add_foreign_grammar $l, $m, $e, None, Some(1), false, $($parts)*)
+    );
+    ( @rules $l:expr, $m:expr, g($e:expr)*? $($parts:tt)*) => (
+        grammar!(@add_foreign_grammar $l, $m, $e, Some(0), None, true, $($parts)*)
+    );
+    ( @rules $l:expr, $m:expr, g($e:expr)* $($parts:tt)*) => (
+        grammar!(@add_foreign_grammar $l, $m, $e, Some(0), None, false, $($parts)*)
+    );
+    ( @rules $l:expr, $m:expr, g($e:expr)+? $($parts:tt)*) => (
+        grammar!(@add_foreign_grammar $l, $m, $e, Some(1), None, true, $($parts)*)
+    );
+    ( @rules $l:expr, $m:expr, g($e:expr)+ $($parts:tt)*) => (
+        grammar!(@add_foreign_grammar $l, $m, $e, Some(1), None, false, $($parts)*)
+    );
+    ( @rules $l:expr, $m:expr, g($e:expr){$low:expr,$high:expr}? $($parts:tt)*) => (
+        grammar!(@add_foreign_grammar $l, $m, $e, Some($low), Some($high), true, $($parts)*)
+    );
+    ( @rules $l:expr, $m:expr, g($e:expr){$low:expr,$high:expr} $($parts:tt)*) => (
+        grammar!(@add_foreign_grammar $l, $m, $e, Some($low), Some($high), false, $($parts)*)
+    );
+    ( @rules $l:expr, $m:expr, g($e:expr){$low:expr,}? $($parts:tt)*) => (
+        grammar!(@add_foreign_grammar $l, $m, $e, Some($low), None, true, $($parts)*)
+    );
+    ( @rules $l:expr, $m:expr, g($e:expr){$low:expr,} $($parts:tt)*) => (
+        grammar!(@add_foreign_grammar $l, $m, $e, Some($low), None, false, $($parts)*)
+    );
+    ( @rules $l:expr, $m:expr, g($e:expr){$n:expr} $($parts:tt)*) => (
+        grammar!(@add_foreign_grammar $l, $m, $e, Some($n), Some($n), false, $($parts)*)
+    );
+    ( @rules $l:expr, $m:expr, g($e:expr) $($parts:tt)*) => (
+        grammar!(@add_foreign_grammar $l, $m, $e, None, None, false, $($parts)*)
+    );
+
     // general rule for adding a (rule)
     // (string) introduces a single leaf; repetition suffix is optional
     ( @add_string $l:expr, $m:expr, $e:expr, $low:expr, $high:expr, $stingy:expr, $($parts:tt)* ) => (
@@ -298,7 +347,7 @@ pub fn build_grammar(
                             .clone()
                             .add(&v.iter().map(|s| s.as_str()).collect::<Vec<_>>())
                             .compile_bounded(i == 0, i == last_index, true);
-                        if flags.add_space && i != 0 {
+                        if flags.add_space && (i != 0 || low.is_some() || high.is_some()) {
                             g = left_pad(g);
                         }
                         if low.is_some() {
@@ -314,7 +363,23 @@ pub fn build_grammar(
                     }
                     Part::G(g, low, high, stingy) => {
                         let mut g = compiled.get(g).unwrap().clone();
-                        if flags.add_space && i != 0 {
+                        if flags.add_space && (i != 0 || low.is_some() || high.is_some()) {
+                            g = left_pad(g);
+                        }
+                        if low.is_some() {
+                            g = g.reps_min(low.unwrap()).unwrap();
+                        }
+                        if high.is_some() {
+                            g = g.reps_max(high.unwrap()).unwrap();
+                        }
+                        if *stingy {
+                            g = g.stingy(true);
+                        }
+                        RuleFragment::G(g)
+                    }
+                    Part::F(g, low, high, stingy) => {
+                        let mut g = g.clone();
+                        if flags.add_space && (i != 0 || low.is_some() || high.is_some()) {
                             g = left_pad(g);
                         }
                         if low.is_some() {
@@ -337,7 +402,7 @@ pub fn build_grammar(
                                 i == last_index,
                                 false,
                             );
-                            if flags.add_space && i != 0 {
+                            if flags.add_space && (i != 0 || low.is_some() || high.is_some()) {
                                 g = left_pad(g);
                             }
                             if low.is_some() {
@@ -392,10 +457,11 @@ pub fn left_pad(g: Grammar) -> Grammar {
 #[derive(Debug)]
 #[doc(hidden)]
 pub enum Part {
-    R(String),
-    V(Vec<String>, Option<usize>, Option<usize>, bool),
-    G(String, Option<usize>, Option<usize>, bool),
-    S(String, Option<usize>, Option<usize>, bool),
+    R(String),                                          // regex
+    V(Vec<String>, Option<usize>, Option<usize>, bool), // vector of strs
+    G(String, Option<usize>, Option<usize>, bool),      // rule reference
+    F(Grammar, Option<usize>, Option<usize>, bool),     // foreign (external to macro) grammar
+    S(String, Option<usize>, Option<usize>, bool),      // string literal
 }
 
 #[derive(Clone)]

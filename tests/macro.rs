@@ -1,5 +1,5 @@
 #![feature(test)]
-#![recursion_limit="256"]
+#![recursion_limit = "256"]
 #[macro_use]
 extern crate pidgin;
 
@@ -372,8 +372,30 @@ fn optional_space_with_repetition() {
 }
 
 #[test]
+fn foreign_grammar() {
+    let g = grammar!{
+        thing => (?bB) [&vec!["cat", "crouton", "caveman", "pomegranate"]]
+    };
+    let g = grammar!{
+        things -> g(g)+
+    };
+    let matcher = g.matcher().unwrap();
+    let p = matcher.parse("cat caveman").unwrap();
+    assert!(p.name("thing").is_some());
+    assert_eq!(p.as_str(), "cat caveman");
+    assert_eq!(
+        p.name("thing").unwrap().as_str(),
+        "caveman",
+        "thing is last thing"
+    );
+}
+
+#[test]
 fn complex_example() {
-    let mdays = &(1..=31).into_iter().map( |i| i.to_string()).collect::<Vec<_>>();
+    let mdays = &(1..=31)
+        .into_iter()
+        .map(|i| i.to_string())
+        .collect::<Vec<_>>();
     let g = grammar!{
         (?i)
         // top rule -- each thing matched against is expected only to be a time expression
