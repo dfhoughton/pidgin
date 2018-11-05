@@ -232,8 +232,6 @@ fn rule_general_and_specific_flags() {
     assert!(p.name("foo").is_some());
     assert_eq!(p.name("foo").unwrap().as_str(), "FOO");
     assert!(p.name("bar").is_some());
-    println!("g: {}", g);
-    println!("rx: {}", matcher.rx);
     assert!(!matcher.is_match("fooBAR"));
 }
 
@@ -405,7 +403,6 @@ fn complex_example() {
         type           => <relative> | <absolute>
         relative       -> <modifier> <unit> | <modifier> <period>
         period         => <weekday> | <month>
-        absolute       => <month_day>
         absolute       => <month_day> | <day_month_year> | <month_year>
         absolute       => <month_day_year> | <year>
         month_day      -> <month> <mday>
@@ -450,4 +447,19 @@ fn complex_example() {
     let p = matcher.parse("May 6, 1969").unwrap();
     assert!(p.name("absolute").is_some());
     assert!(p.name("month").is_some());
+}
+
+#[test]
+fn using_sub_rule() {
+    let library = grammar!{
+        books => <cat> | <dog> | <camel>
+        cat   => [&vec!["persian", "siamese", "calico", "tabby"]]
+        dog   => [&vec!["dachshund", "chihuahua", "corgi", "malamute"]]
+        camel => [&vec!["bactrian", "dromedary"]]
+    };
+    let g = grammar!{
+        seen -> ("I saw a") g(library.rule("cat").unwrap()) (".")
+    };
+    let matcher = g.matcher().unwrap();
+    assert!(matcher.is_match("I saw a calico."));
 }

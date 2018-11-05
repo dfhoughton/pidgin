@@ -2,6 +2,109 @@ use crate::grammar::Grammar;
 use crate::pidgin::{Pidgin, RuleFragment};
 use crate::util::Expression;
 
+/// Compiles a `pidgin::Grammar`. This is likely all that you want.
+///
+/// # Examples
+///
+/// ```rust
+/// #![recursion_limit = "256"] // if your grammar is big, you may need to bump this limit
+/// #[macro_use] extern crate pidgin;
+/// let mdays = &(1..=31)
+///     .into_iter()
+///     .map(|i| i.to_string())
+///     .collect::<Vec<_>>();
+/// let g = grammar!{
+///     (?i)
+///     // top rule -- each thing matched against is expected only to be a time expression
+///     time -> r(r"\A") <type> r(r"\z")
+///
+///     // sub-rules
+///     type           => <relative> | <absolute>
+///     relative       -> <modifier> <unit> | <modifier> <period>
+///     period         => <weekday> | <month>
+///     absolute       => <month_day> | <day_month_year> | <month_year>
+///     absolute       => <month_day_year> | <year>
+///     month_day      -> <month> <mday>
+///     day_month_year -> <mday> <month> <year>
+///     month_year     -> <month> <year>
+///     month_day_year -> <month> <mday> (",") <year>
+///
+///     // leaves
+///     mday     => (?bB) [&mdays.iter().map(|s| s.as_str()).collect::<Vec<_>>()]
+///     modifier => (?bB) [&vec!["this", "last", "next"]]
+///     unit     => (?bB) [&vec!["day", "week", "month", "year"]]
+///     year     => r(r"\b\d{4}\b")
+///     weekday  => (?bB) [&vec![
+///                         "sunday",
+///                         "monday",
+///                         "tuesday",
+///                         "wednesday",
+///                         "thursday",
+///                         "friday",
+///                         "saturday"
+///                       ]]
+///     month    => (?bB) [&vec![
+///                         "january",
+///                         "february",
+///                         "march",
+///                         "april",
+///                         "may",
+///                         "june",
+///                         "july",
+///                         "august",
+///                         "september",
+///                         "october",
+///                         "november",
+///                         "december",
+///                       ]]
+/// };
+/// let matcher = g.matcher().unwrap();
+/// assert!(matcher.is_match("May 6, 1969"));
+/// assert!(matcher.is_match("May 6"));
+/// assert!(matcher.is_match("1969"));
+/// assert!(matcher.is_match("last Saturday"));
+/// let p = matcher.parse("May 6, 1969").unwrap();
+/// assert!(p.name("absolute").is_some());
+/// assert!(p.name("month").is_some());
+/// ```
+///
+/// # Conventions
+///
+/// # Structure
+///
+/// ```rust
+/// # #[macro_use] extern crate pidgin;
+/// grammar!{
+///   // optional default flags for all rules
+///   (?ims)
+///
+///   // a master rule that must match
+///   TOP => <cat> | <dog>
+///
+///   // optional sub-rules used by the master rule
+///   cat =>
+///          (?-i) // optional rule-specific flats
+///          [&vec!["calico", "tabby"]]
+///   dog => [&vec!["dachshund", "malamute"]]
+/// };
+/// ```
+/// ## Order
+///
+/// The programmatic API requires that you define grammars from specific to
+/// general -- define cats and dogs before you define an animal as either a cat
+/// or a dog.
+///
+/// ```rust
+/// # use pidgin::Pidgin;
+/// let mut p = Pidgin::new();
+/// let cats = p.grammar(&vec!["calico", "tabby"]);
+/// let dogs = p.grammar(&vec!["dachshund", "malamute"]);
+/// p.rule("cat", &cats);
+/// p.rule("dog", &dogs);
+/// let animal = p.grammar(&vec!["cat","dog"]);
+/// ```
+///
+/// The macro requires that you define your grammar from general to specific.
 #[macro_export]
 macro_rules! grammar {
     // common state has been set, proceed to recursively nibbling away bits of the grammar
@@ -319,10 +422,11 @@ pub fn build_grammar(
     mut names_to_parts: std::collections::HashMap<String, Vec<(MacroFlags, Vec<Part>)>>,
     macro_flags: MacroFlags,
 ) -> Grammar {
+    let rules = sort_rules(rules, &names_to_parts);
     let base_pidgin = macro_flags.adjust(Pidgin::new());
     let mut compiled: std::collections::HashMap<String, Grammar> =
         std::collections::HashMap::with_capacity(rules.len());
-    for rule in rules.iter().rev() {
+    for rule in &rules {
         let alternates: Vec<(MacroFlags, Vec<Part>)> = names_to_parts.remove(rule).unwrap();
         let mut grammars = vec![];
         for (flags, parts) in alternates {
@@ -433,11 +537,54 @@ pub fn build_grammar(
         };
         compiled.insert(rule.clone(), g);
     }
-    let mut g = compiled.remove(rules.first().expect("no rules")).unwrap();
-    g.name(rules.first().unwrap());
+    let mut g = compiled.remove(rules.last().expect("no rules")).unwrap();
+    g.name(rules.last().unwrap());
     g
 }
 
+// sort rules from least to most dependent
+#[doc(hidden)]
+pub fn sort_rules(
+    mut rules: Vec<String>,
+    names_to_parts: &std::collections::HashMap<String, Vec<(MacroFlags, Vec<Part>)>>,
+) -> Vec<String> {
+    let top = rules.remove(0);
+    let mut sorted = Vec::new();
+    let mut handled: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    while rules.len() > 0 {
+        let mut added = Vec::new();
+        let mut retained = Vec::new();
+        'outer: for r in rules {
+            if let Some(v) = names_to_parts.get(&r) {
+                for (_, v) in v {
+                    for p in v {
+                        if let Part::G(n, _, _, _) = p {
+                            if !handled.contains(n) {
+                                retained.push(r);
+                                continue 'outer;
+                            }
+                        }
+                    }
+                }
+                handled.insert(r.clone());
+                added.push(r);
+            }
+        }
+        if added.len() == 0 {
+            panic!(
+                "could not find rules referred to in these rules: {:?}",
+                retained
+            );
+        } else {
+            rules = retained;
+            for r in added {
+                sorted.push(r);
+            }
+        }
+    }
+    sorted.push(top);
+    sorted
+}
 // add optional whitespace to the left of an element
 #[doc(hidden)]
 pub fn left_pad(g: Grammar) -> Grammar {
