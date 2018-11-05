@@ -104,7 +104,75 @@ use crate::util::Expression;
 /// let animal = p.grammar(&vec!["cat","dog"]);
 /// ```
 ///
-/// The macro requires that you define your grammar from general to specific.
+/// The macro requires only that you provide a master rule and that the remaining
+/// rules all be sortable such that every rule that is referenced is defined
+/// and that there is no recursion. Recursion will cause a panic.
+///
+/// ## Conventions
+/// ### Flags
+///
+/// Flags take the form `(?<on>-<off>)` just as in regular expressions. They may
+/// appear before all the rules in the grammar as defaults and after the arrow
+/// of a particular rule, in which case they apply to that rule alone. Rules
+/// do not inherit the flags of rules they are contained in. In
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// grammar!{
+///   foo -> (?i) ("the") <cat>
+///   cat => ("cat")
+/// };
+/// ```
+/// the `<cat>` rule is not case-insensitive.
+///
+/// The flags understood are the standard regex flags minus `x` plus a few
+/// peculiar to grammars.
+/// #### `b` and `B`
+/// The `b` and `B` flags correspond to the `\b` regex anchor, the `b` flag being
+/// for the left word boundary anchor and the `B` flag for the right. They only
+/// have an effect on `("string literal")` and `[&str_vector]` elements of a
+/// rule, and only when these elements are on the left or right margin of their
+/// rule.
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// grammar!{
+///   foo -> (?bB) ("cat") ("dog") ("donkey")
+/// };
+/// ```
+/// will produce a regex equivalent to `\bcat\s*dog\s*donkey\b`.
+/// #### `w` and `W`
+/// The `w` and `W` flags, which are mutually incompatible, control the normalization
+/// of whitespace in `[&str_vec]` elements. `w` means whitespace means "some whitespace"
+/// and `W` means "maybe some whitespace".
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// grammar!{
+///   foo => (?w) [&vec!["cat a log"]]
+/// };
+/// ```
+/// is equivalent to `cat\s+a\s+log`.
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// grammar!{
+///   foo => (?W) [&vec!["cat a log"]]
+/// };
+/// ```
+/// is equivalent to `cat\s*a\s*log`.
+///
+/// As in regular expressions, the order of flags, or repetition of flags, in
+/// "on" and "off" parts is irrelevant. `(?bB)` means the same thing as `(?Bb)`, which
+/// means the same thing as `(?bbbbbBBBB)`, which means the same thing as `(?bBbB)`.
+/// ### Identifiers
+/// ### Arrows
+/// #### `=>`
+/// #### `->`
+/// ### Elements
+/// #### (literal)
+/// #### r(regex)
+/// #### <rule>
+/// #### [&vec]
+/// #### g(grammar)
+/// ### Repetition
+/// ### Alternation
 #[macro_export]
 macro_rules! grammar {
     // common state has been set, proceed to recursively nibbling away bits of the grammar
