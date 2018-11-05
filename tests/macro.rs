@@ -463,3 +463,41 @@ fn using_sub_rule() {
     let matcher = g.matcher().unwrap();
     assert!(matcher.is_match("I saw a calico."));
 }
+
+#[test]
+fn rx() {
+    let g = grammar!{
+        foo -> r(r"\A") <bar> r(r"\z")
+        bar => (?i) [&vec!["cat", "camel", "corn"]]
+    };
+    let rx = g.rx().unwrap().to_string();
+    assert_eq!(r"\A(?i:\s*c(?:orn|a(?:t|mel)))\s*\z", rx);
+}
+
+#[test]
+fn rx_example() {
+    let g = grammar!{
+        sentence    -> <capitalized_word> <other_words>? <terminal_punctuation>
+        other_words -> <other_word>+
+        other_word  -> <non_terminal_punctuation>? <word>
+        capitalized_word         => r(r"\b[A-Z]\w*\b")
+        word                     => r(r"\b\w+\b")
+        terminal_punctuation     => r(r"[.?!]")
+        non_terminal_punctuation => r("(?:--?|[,;'\"])")
+    };
+    let rx = g.rule("word").unwrap().rx().unwrap();
+    let p = g
+        .matcher()
+        .unwrap()
+        .parse("John, don't forget to pick up chips.")
+        .unwrap();
+    let other_words = p.name("other_words").unwrap().as_str();
+    let other_words = rx
+        .find_iter(other_words)
+        .map(|m| m.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        vec!["don", "t", "forget", "to", "pick", "up", "chips"],
+        other_words
+    );
+}

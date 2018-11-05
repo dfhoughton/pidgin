@@ -1,6 +1,6 @@
 use crate::matching::Matcher;
 use crate::util::{is_atomic, Expression, Flags};
-use regex::Error;
+use regex::{Error, Regex};
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::{BTreeSet, VecDeque};
 use std::fmt;
@@ -486,6 +486,57 @@ impl Grammar {
                 ) + "\n";
         }
         s
+    }
+    /// Generates a non-capturing regex matching what the grammar matches.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # #[macro_use] extern crate pidgin;
+    /// # use std::error::Error;
+    /// # fn dem() -> Result<(),Box<Error>> {
+    /// let g = grammar!{
+    ///     foo -> r(r"\A") <bar> r(r"\z")
+    ///     bar => (?i) [&vec!["cat", "camel", "corn"]]
+    /// };
+    /// let rx = g.rx()?.to_string();
+    /// assert_eq!(r"\A(?i:\s*c(?:orn|a(?:t|mel)))\s*\z", rx);
+    /// # Ok(()) }
+    /// ```
+    ///
+    /// ```rust
+    /// # #[macro_use] extern crate pidgin;
+    /// # use std::error::Error;
+    /// # fn dem() -> Result<(),Box<Error>> {
+    /// let g = grammar!{
+    ///     sentence    -> <capitalized_word> <other_words>? <terminal_punctuation>
+    ///     other_words -> <other_word>+
+    ///     other_word  -> <non_terminal_punctuation>? <word>
+    ///     capitalized_word         => r(r"\b[A-Z]\w*\b")
+    ///     word                     => r(r"\b\w+\b")
+    ///     terminal_punctuation     => r(r"[.?!]")
+    ///     non_terminal_punctuation => r("(?:--?|[,;'\"])")
+    /// };
+    /// let rx = g.rule("word").unwrap().rx().unwrap();
+    /// let p = g
+    ///     .matcher()?
+    ///     .parse("John, don't forget to pick up chips.")
+    ///     .unwrap();
+    /// let other_words = p.name("other_words").unwrap().as_str();
+    /// let other_words = rx
+    ///     .find_iter(other_words)
+    ///     .map(|m| m.as_str())
+    ///     .collect::<Vec<_>>();
+    /// assert_eq!(
+    ///     vec!["don", "t", "forget", "to", "pick", "up", "chips"],
+    ///     other_words
+    /// );
+    /// # Ok(()) }
+    /// ```
+    pub fn rx(&self) -> Result<Regex, Error> {
+        let mut g = self.clear_recursive();
+        g.clear_name();
+        Regex::new(g.to_string().as_str())
     }
     fn describable_grammar(&self) -> Grammar {
         let mut g = self.clone();
