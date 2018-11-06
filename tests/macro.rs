@@ -515,7 +515,6 @@ fn namespace_collision() {
     };
     let matcher = g2.matcher().unwrap();
     let p = matcher.parse("bar baz").unwrap();
-    println!("{}", p);
     assert_eq!(
         vec!["bar", "baz"],
         p.all_names("foo")

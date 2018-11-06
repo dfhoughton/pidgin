@@ -340,8 +340,80 @@ use crate::util::Expression;
 /// };
 /// ```
 ///
+/// Nothing ensures a name used in both grammars is used the same way in each:
+///
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// let g1 = grammar!{
+///     foo => ("bar")   // here foo is bar
+/// };
+/// let g2 = grammar!{
+///     words -> <word>+
+///     word  => <foo> | <bar>
+///     foo   => ("baz") // here foo is baz
+///     bar   => g(g1)   // but the other foo gets in here
+/// };
+/// let matcher = g2.matcher().unwrap();
+/// let p = matcher.parse("bar baz").unwrap();
+/// assert_eq!(
+///     vec!["bar", "baz"],
+///     p.all_names("foo")
+///         .iter()
+///         .map(|m| m.as_str())
+///         .collect::<Vec<_>>()
+/// );
+/// ```
+///
 /// ### Repetition
+///
+/// All element types *except `r(regex)`* can be followed by a repetition suffix.
+/// These are identical to the repetition suffixes allowed by regexes.
+///
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// let g1 = grammar!{
+///   foo => ("bar")
+/// };
+/// grammar!{
+///   foo => <r> | <s>? | <v>* | <g>+
+///   g   => g(g1){2}   g(g1){3,}   g(g1){4,5}
+///   s   => ("foo")??   ("bar")*?   ("baz")+?
+///   v   => [&vec!["plugh"]]{6,}?   [&vec!["quux"]]{7,8}?
+///   r   => r(r"no suffix for me*")
+/// };
+/// ```
+///
+/// There is no need to add repetition suffixes to `r(regex)` rules, since you
+/// can put these in the regex itself. If you absolutely insist, however, you can
+/// add a repetition to a reference to the rule.
+///
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// grammar!{
+///   foo => <r>+?
+///   r   => r(r"no suffix for me*")
+/// };
+/// ```
+///
 /// ### Alternation
+///
+/// Alternation is offering a choice of rules. There are two ways to represent
+/// alternation in a `grammar!`:
+///
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// grammar!{
+///   foo => ("a") | ("b")
+///   foo => ("c")
+/// };
+/// ```
+///
+/// Each definition of a rule is an alternate. Also, within one definition one
+/// may separate alternates with `|`.
+///
+/// Unlike in regexes there is no grouping construction in a `grammar!` aside from
+/// the definition of rules.
+///
 /// ## Recursion
 ///
 /// There are two points that bear mentioning regarding recursion and grammars.
@@ -359,6 +431,12 @@ use crate::util::Expression;
 /// #[macro_use] extern crate pidgin;
 /// // ...
 /// ```
+///
+/// ## `lazy_static!`
+///
+/// As with regexes, the definition of grammars is not something you want to do
+/// repeatedly at runtime. The best practice is to compile them once and then
+/// reuse them with the [`lazy_static`](https://crates.io/crates/lazy_static) macro.
 #[macro_export]
 macro_rules! grammar {
     // common state has been set, proceed to recursively nibbling away bits of the grammar
