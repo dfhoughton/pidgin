@@ -2,6 +2,7 @@ extern crate regex;
 use crate::grammar::Grammar;
 use crate::util::{Expression, Flags};
 use regex::{Captures, Error, Regex};
+use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::HashMap;
 
 /// This is functionally equivalent to a `Regex`: you can use it repeatedly to
@@ -34,10 +35,20 @@ impl Matcher {
                     children: None,
                 };
                 self.build_tree(&mut m, &self.root, s, &captures);
-                let m = self.simplify_tree(m);
+                let mut m = self.simplify_tree(m);
+                self.sort_tree(&mut m);
                 Some(m)
             }
             None => None,
+        }
+    }
+    // put the children in match order
+    fn sort_tree<'t>(&self, m: &mut Match) {
+        if let Some(ref mut children) = m.children {
+            children.sort();
+            for c in children {
+                self.sort_tree(c);
+            }
         }
     }
     fn simplify_tree<'t>(&self, m: Match<'t>) -> Match<'t> {
@@ -274,5 +285,29 @@ impl<'t> Match<'t> {
 impl<'t> std::fmt::Display for Match<'t> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         self._fmt(0, f)
+    }
+}
+
+impl<'t> PartialEq for Match<'t> {
+    fn eq(&self, other: &Match<'t>) -> bool {
+        self.cmp(other) == Ordering::Equal && self.rule == other.rule
+    }
+}
+
+impl<'t> Eq for Match<'t> {}
+
+impl<'t> PartialOrd for Match<'t> {
+    fn partial_cmp(&self, other: &Match<'t>) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<'t> Ord for Match<'t> {
+    fn cmp(&self, other: &Match<'t>) -> Ordering {
+        let o = self.start.cmp(&other.start);
+        match o {
+            Ordering::Equal => self.end.cmp(&other.end),
+            _ => o,
+        }
     }
 }

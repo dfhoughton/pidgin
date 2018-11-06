@@ -501,3 +501,26 @@ fn rx_example() {
         other_words
     );
 }
+
+#[test]
+fn namespace_collision() {
+    let g1 = grammar!{
+        foo => ("bar")
+    };
+    let g2 = grammar!{
+        words -> <word>+
+        word  => <foo> | <bar>
+        foo   => ("baz")
+        bar   => g(g1)
+    };
+    let matcher = g2.matcher().unwrap();
+    let p = matcher.parse("bar baz").unwrap();
+    println!("{}", p);
+    assert_eq!(
+        vec!["bar", "baz"],
+        p.all_names("foo")
+            .iter()
+            .map(|m| m.as_str())
+            .collect::<Vec<_>>()
+    );
+}

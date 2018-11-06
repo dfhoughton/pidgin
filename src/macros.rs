@@ -70,7 +70,7 @@ use crate::util::Expression;
 ///
 /// # Conventions
 ///
-/// # Structure
+/// ## Structure
 ///
 /// ```rust
 /// # #[macro_use] extern crate pidgin;
@@ -101,7 +101,7 @@ use crate::util::Expression;
 /// let dogs = p.grammar(&vec!["dachshund", "malamute"]);
 /// p.rule("cat", &cats);
 /// p.rule("dog", &dogs);
-/// let animal = p.grammar(&vec!["cat","dog"]);
+/// let animal = p.grammar(&vec!["cat", "dog"]);
 /// ```
 ///
 /// The macro requires only that you provide a master rule and that the remaining
@@ -161,18 +161,204 @@ use crate::util::Expression;
 /// As in regular expressions, the order of flags, or repetition of flags, in
 /// "on" and "off" parts is irrelevant. `(?bB)` means the same thing as `(?Bb)`, which
 /// means the same thing as `(?bbbbbBBBB)`, which means the same thing as `(?bBbB)`.
+///
 /// ### Identifiers
+///
+/// Rule names in grammars must be legal rust identifiers: `rule` is good; `7ule` and `r*le` are bad.
+///
 /// ### Arrows
+///
+/// Rule names are separated from their definition by one of two arrows.
+///
 /// #### `=>`
+///
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// grammar!{
+///   foo => ("cat") ("dog") // equivalent to the regex catdog
+/// };
+/// ```
+///
+/// This is the usual separator.
+///
 /// #### `->`
+///
+/// The skinny arrow separator indicates that the elements of the rule may
+/// optionally be separated by whitespace.
+///
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// grammar!{
+///   foo -> ("cat") ("dog") // equivalent to the regex cat\s*dog
+/// };
+/// ```
+///
+/// Repeated elements may also be separated by whitespace.
+///
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// grammar!{
+///   foo -> ("cat") ("dog")+ // equivalent to the regex cat(?:\s*dog)+
+/// };
+/// ```
+///
+/// Normally the first element of a `->` rule is not preceded by any optional
+/// whitespace, but this is not so for repeated elements.
+///
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// grammar!{
+///   foo -> ("dog")+ // equivalent to the regex (?:\s*dog)+
+/// };
+/// ```
+///
+/// If you combine the skinny arrow with word boundaries, the optional space
+/// may become obligatory.
+///
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// grammar!{
+///   foo  -> <word>+
+///   word => (?bB) [&vec!["cat", "dog", "tortoise"]]
+/// };
+/// ```
+///
+/// In order for there to be a word boundary between the repeated words in this
+/// case, there must be some space.
+///
 /// ### Elements
-/// #### (literal)
-/// #### r(regex)
-/// #### <rule>
-/// #### [&vec]
-/// #### g(grammar)
+///
+/// A rule definition, after the optional flags, consists of a sequence of
+/// rule elements.
+///
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// let qux = grammar!{
+///   something => ("or other")
+/// };
+/// let illustration = grammar!{
+///   foo => <bar> r("baz") [&vec!["plugh"]] g(qux)
+///   bar => ("baz")
+/// };
+/// ```
+///
+/// #### `(literal)`
+///
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// grammar!{
+///   foo => ("bar")
+/// };
+/// ```
+///
+/// An element delimited by bare parentheses provides a literal. The parentheses
+/// must contain an expression that can be converted to a `String` with `to_string`.
+/// The value of this string will not be further manipulated. Whitespace characters
+/// are preserved as is. This literal will be interpolated into the constructed
+/// regular expression with appropriate escaping, so, for instance, `.` will
+/// become `\.`. Flags such as `(?i)` may still apply.
+///
+/// #### `r(regex)`
+///
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// grammar!{
+///   foo => r(r"\d+")
+/// };
+/// ```
+///
+/// An element delimited by a pair of parentheses proceeded by an `r` provides a regular.
+/// expression literal. The parentheses again must contain an expression that can
+/// converted to a `String` via `to_string`. Unlike the `(literal)` expression,
+/// the characters in the `r(regex)` literal will not be escaped.
+///
+/// Take care to avoid named captures in `r(regex)` elements, as Rust's `regex`
+/// does not allow the repetition of group names. Also, it is possible the name
+/// you choose will conflict with those inserted by the macro. These all consist
+/// of an `m` followed by an integer.
+///
+/// #### `<rule>`
+///
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// grammar!{
+///   foo => <bar>
+///   bar => ("baz")
+/// };
+/// ```
+///
+/// An element delimited by angle brackets refers to another rule.
+/// The parentheses again must contain an expression that can
+/// converted to a `String` via `to_string`. Unlike the `(literal)` expression,
+/// the characters in the `r(regex)` literal will not be escaped.
+///
+/// #### `[&vec]`
+///
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// grammar!{
+///   foo => [&vec!["cat", "dog", "tortoise"]]
+/// };
+/// ```
+///
+/// An element delimited by square brackets introduces a list of elements to
+/// be condensed into a regular expression. Meta-characters in the items in the
+/// list will be escaped, but white space may be normalized. The square brackets
+/// must contain a Rust expression of type `&[&str]`.
+///
+/// #### `g(grammar)`
+///
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// let sub_grammar = grammar!{
+///   foo => ("bar")
+/// };
+/// grammar!{
+///   foo => g(sub_grammar)
+/// };
+/// ```
+///
+/// The expression inside a `g(grammar)` element must be a `pidgin::Grammar`
+/// or a reference to the same. It will be converted into an owned `Grammar`
+/// via `clone`.
+///
+/// The `g(grammar)` element provides a means to reuse grammars in other grammars.
+/// Note that `pidgin::Grammar::rule` provides a mechanism to extract a useful
+/// piece of one grammar for re-use in another.
+///
+/// ```rust
+/// #  #[macro_use] extern crate pidgin;
+/// let names = grammar!{
+///   name       => <east_asian> | <western>
+///   east_asian -> <surname> <given_name>
+///   western    -> <given_name> <surname>
+///   given_name => (?bB) [&vec!["Sally", "Wataru", "Jo"]]
+///   surname    => (?bB) [&vec!["Ng", "Smith", "Salasie"]]
+/// };
+/// grammar!{
+///   foo => g(names.rule("surname").unwrap())
+/// };
+/// ```
+///
 /// ### Repetition
 /// ### Alternation
+/// ## Recursion
+///
+/// There are two points that bear mentioning regarding recursion and grammars.
+///
+/// 1. You cannot write a recursive grammar. There is no mechanism in `regex::Regex`
+/// which would allow it and the macro could not compile it.
+/// 2. The `grammar!` macro works by recursion, nibbling elements off the
+/// beginning of the grammar definition and then recursing until all token are
+/// consumed. This means if your grammar is large, and not terribly large, it
+/// may require a larger stack during compilation than the compiler provides by
+/// default. In this case one need only request more space.
+///
+/// ```rust
+/// #![recursion_limit = "256"] // bump this up until your grammar compiles
+/// #[macro_use] extern crate pidgin;
+/// // ...
+/// ```
 #[macro_export]
 macro_rules! grammar {
     // common state has been set, proceed to recursively nibbling away bits of the grammar
