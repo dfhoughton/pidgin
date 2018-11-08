@@ -658,12 +658,11 @@ macro_rules! grammar {
     // general rule for adding a [rule]
     // [leaves] ingest a list of leaves; repetition suffix is optional
     ( @add_vec $l:expr, $m:expr, $e:expr, $low:expr, $high:expr, $stingy:expr, $($parts:tt)* ) => (
-        let terms: &[&str] = $e;
         grammar!(
             @add_part
             $l,
             $m,
-            $crate::macros::Part::V(terms.iter().map(|s| s.to_string()).collect(), $low, $high, $stingy),
+            $crate::macros::Part::V($e.iter().map(|s| s.to_string()).collect(), $low, $high, $stingy),
             $($parts)*
         )
     );

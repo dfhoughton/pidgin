@@ -182,6 +182,7 @@ extern crate lazy_static;
 
 mod grammar;
 #[macro_use]
+#[doc(hidden)]
 pub mod macros;
 mod matching;
 mod pidgin;

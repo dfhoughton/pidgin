@@ -259,7 +259,7 @@ fn regex_rule() {
 fn vec_rule_simple() {
     let words = vec!["cat", "camel", "canteloupe"];
     let g = grammar!{
-        foo => [&words]
+        foo => [words]
     };
     let matcher = g.matcher().unwrap();
     for w in words {
@@ -271,7 +271,7 @@ fn vec_rule_simple() {
 fn vec_rule_with_repetition() {
     let words = vec!["cat", "camel", "canteloupe"];
     let g = grammar!{
-        foo => [&words]+
+        foo => [words]+
     };
     let matcher = g.matcher().unwrap();
     for w in words {
@@ -293,7 +293,7 @@ fn vec_rule_with_repetition() {
 fn word_bound_left() {
     let words = vec!["cat", "@cat"];
     let g = grammar!{
-        foo => (?b) [&words]
+        foo => (?b) [words]
     };
     let matcher = g.matcher().unwrap();
     assert!(matcher.is_match("cat"));
@@ -307,7 +307,7 @@ fn word_bound_left() {
 fn word_bound_right() {
     let words = vec!["cat", "cat@"];
     let g = grammar!{
-        foo => (?B) [&words]
+        foo => (?B) [words]
     };
     let matcher = g.matcher().unwrap();
     assert!(matcher.is_match("cat"));
@@ -321,7 +321,7 @@ fn word_bound_right() {
 fn some_space() {
     let words = vec!["cat a log"];
     let g = grammar!{
-        foo => (?w) [&words]
+        foo => (?w) [words]
     };
     let matcher = g.matcher().unwrap();
     assert!(matcher.is_match("cat  a   log"));
@@ -332,7 +332,7 @@ fn some_space() {
 fn maybe_space() {
     let words = vec!["cat a log"];
     let g = grammar!{
-        foo => (?W) [&words]
+        foo => (?W) [words]
     };
     let matcher = g.matcher().unwrap();
     assert!(matcher.is_match("cat  a   log"));
@@ -372,7 +372,7 @@ fn optional_space_with_repetition() {
 #[test]
 fn foreign_grammar() {
     let g = grammar!{
-        thing => (?bB) [&vec!["cat", "crouton", "caveman", "pomegranate"]]
+        thing => (?bB) [vec!["cat", "crouton", "caveman", "pomegranate"]]
     };
     let g = grammar!{
         things -> g(g)+
@@ -411,11 +411,11 @@ fn complex_example() {
         month_day_year -> <month> <mday> (",") <year>
 
         // leaves
-        mday     => (?bB) [&mdays.iter().map(|s| s.as_str()).collect::<Vec<_>>()]
-        modifier => (?bB) [&vec!["this", "last", "next"]]
-        unit     => (?bB) [&vec!["day", "week", "month", "year"]]
+        mday     => (?bB) [mdays.iter().map(|s| s.as_str()).collect::<Vec<_>>()]
+        modifier => (?bB) [vec!["this", "last", "next"]]
+        unit     => (?bB) [vec!["day", "week", "month", "year"]]
         year     => r(r"\b\d{4}\b")
-        weekday  => (?bB) [&vec![
+        weekday  => (?bB) [vec![
                             "sunday",
                             "monday",
                             "tuesday",
@@ -424,7 +424,7 @@ fn complex_example() {
                             "friday",
                             "saturday"
                           ]]
-        month    => (?bB) [&vec![
+        month    => (?bB) [vec![
                             "january",
                             "february",
                             "march",
@@ -453,9 +453,9 @@ fn complex_example() {
 fn using_sub_rule() {
     let library = grammar!{
         books => <cat> | <dog> | <camel>
-        cat   => [&vec!["persian", "siamese", "calico", "tabby"]]
-        dog   => [&vec!["dachshund", "chihuahua", "corgi", "malamute"]]
-        camel => [&vec!["bactrian", "dromedary"]]
+        cat   => [vec!["persian", "siamese", "calico", "tabby"]]
+        dog   => [vec!["dachshund", "chihuahua", "corgi", "malamute"]]
+        camel => [vec!["bactrian", "dromedary"]]
     };
     let g = grammar!{
         seen -> ("I saw a") g(library.rule("cat").unwrap()) (".")
@@ -468,7 +468,7 @@ fn using_sub_rule() {
 fn rx() {
     let g = grammar!{
         foo -> r(r"\A") <bar> r(r"\z")
-        bar => (?i) [&vec!["cat", "camel", "corn"]]
+        bar => (?i) [vec!["cat", "camel", "corn"]]
     };
     let rx = g.rx().unwrap().to_string();
     assert_eq!(r"\A(?i:\s*c(?:orn|a(?:t|mel)))\s*\z", rx);
@@ -522,4 +522,83 @@ fn namespace_collision() {
             .map(|m| m.as_str())
             .collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn messing_about() {
+    let date = grammar!{
+        (?ibB)
+
+        date -> <weekday> (",") <month> <monthday> (",") <year>
+        date -> <month> <monthday> | <weekday> | <monthday> <month> <year>
+        date -> <month> <monthday> (",") <year>
+        date -> <numeric_date>
+
+        numeric_date -> <year> ("/") <numeric_month> ("/") <numeric_day>
+        numeric_date -> <year> ("-") <numeric_month> ("-") <numeric_day>
+        numeric_date -> <numeric_month> ("/") <numeric_day> ("/") <year>
+        numeric_date -> <numeric_month> ("-") <numeric_day> ("-") <year>
+        numeric_date -> <numeric_day> ("/") <numeric_month> ("/") <year>
+        numeric_date -> <numeric_day> ("-") <numeric_month> ("-") <year>
+
+        year    => r(r"\b[12][0-9]{3}|[0-9]{2}\b")
+        weekday => [
+                "Sunday Monday Tuesday Wednesday Thursday Friday Saturday"
+                    .split(" ")
+                    .into_iter()
+                    .flat_map(|s| vec![s, &s[0..2], &s[0..3]])
+                    .collect::<Vec<_>>()
+            ]
+        weekday     => (?-i) [vec!["M", "T", "W", "R", "F", "S", "U"]]
+        monthday    => [(1..=31).into_iter().collect::<Vec<_>>()]
+        numeric_day => [
+                (1..=31)
+                    .into_iter()
+                    .flat_map(|i| vec![i.to_string(), format!("{:02}", i)])
+                    .collect::<Vec<_>>()
+            ]
+        month => [
+            vec![
+                "January",
+                "February",
+                "March",
+                "April",
+                "May",
+                "June",
+                "July",
+                "August",
+                "September",
+                "October",
+                "November",
+                "December",
+            ].into_iter().flat_map(|s| vec![s, &s[0..3]]).collect::<Vec<_>>()
+          ]
+        numeric_month => [
+                (1..=31)
+                    .into_iter()
+                    .flat_map(|i| vec![i.to_string(), format!("{:02}", i)])
+                    .collect::<Vec<_>>()
+            ]
+    };
+    let matcher = date.matcher().unwrap();
+
+    // we let whitespace vary
+    assert!(matcher.is_match(" June   6,    1969 "));
+    // we made it case-insensitive
+    assert!(matcher.is_match("june 6, 1969"));
+    // but we want to respect word boundaries
+    assert!(!matcher.is_match("jejune 6, 1969"));
+    // we can inspect the parse tree
+    let m = matcher.parse("2018/10/6").unwrap();
+    assert!(m.name("numeric_date").is_some());
+    assert_eq!(m.name("year").unwrap().as_str(), "2018");
+    let m = matcher.parse("Friday").unwrap();
+    assert!(!m.name("numeric_date").is_some());
+    assert!(m.name("weekday").is_some());
+    // still more crazy things we allow
+    assert!(matcher.is_match("F"));
+    assert!(matcher.is_match("friday"));
+    assert!(matcher.is_match("Fri"));
+    // but we said single-letter days had to be capitalized
+    assert!(!matcher.is_match("f"));
 }
