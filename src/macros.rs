@@ -30,11 +30,11 @@ use crate::util::Expression;
 ///     month_day_year -> <month> <mday> (",") <year>
 ///
 ///     // leaves
-///     mday     => (?bB) [&mdays.iter().map(|s| s.as_str()).collect::<Vec<_>>()]
-///     modifier => (?bB) [&vec!["this", "last", "next"]]
-///     unit     => (?bB) [&vec!["day", "week", "month", "year"]]
+///     mday     => (?bB) [mdays]
+///     modifier => (?bB) [["this", "last", "next"]]
+///     unit     => (?bB) [["day", "week", "month", "year"]]
 ///     year     => r(r"\b\d{4}\b")
-///     weekday  => (?bB) [&vec![
+///     weekday  => (?bB) [[
 ///                         "sunday",
 ///                         "monday",
 ///                         "tuesday",
@@ -43,7 +43,7 @@ use crate::util::Expression;
 ///                         "friday",
 ///                         "saturday"
 ///                       ]]
-///     month    => (?bB) [&vec![
+///     month    => (?bB) [[
 ///                         "january",
 ///                         "february",
 ///                         "march",
@@ -84,8 +84,8 @@ use crate::util::Expression;
 ///   // optional sub-rules used by the master rule
 ///   cat =>
 ///          (?-i) // optional rule-specific flats
-///          [&vec!["calico", "tabby"]]
-///   dog => [&vec!["dachshund", "malamute"]]
+///          [["calico", "tabby"]]
+///   dog => [["dachshund", "malamute"]]
 /// };
 /// ```
 /// ## Order
@@ -141,19 +141,19 @@ use crate::util::Expression;
 /// will produce a regex equivalent to `\bcat\s*dog\s*donkey\b`.
 /// #### `w` and `W`
 /// The `w` and `W` flags, which are mutually incompatible, control the normalization
-/// of whitespace in `[&str_vec]` elements. `w` means whitespace means "some whitespace"
+/// of whitespace in `[vec]` elements. `w` means whitespace means "some whitespace"
 /// and `W` means "maybe some whitespace".
 /// ```rust
 /// #  #[macro_use] extern crate pidgin;
 /// grammar!{
-///   foo => (?w) [&vec!["cat a log"]]
+///   foo => (?w) [["cat a log"]]
 /// };
 /// ```
 /// is equivalent to `cat\s+a\s+log`.
 /// ```rust
 /// #  #[macro_use] extern crate pidgin;
 /// grammar!{
-///   foo => (?W) [&vec!["cat a log"]]
+///   foo => (?W) [["cat a log"]]
 /// };
 /// ```
 /// is equivalent to `cat\s*a\s*log`.
@@ -219,7 +219,7 @@ use crate::util::Expression;
 /// #  #[macro_use] extern crate pidgin;
 /// grammar!{
 ///   foo  -> <word>+
-///   word => (?bB) [&vec!["cat", "dog", "tortoise"]]
+///   word => (?bB) [vec!["cat", "dog", "tortoise"]]
 /// };
 /// ```
 ///
@@ -237,7 +237,7 @@ use crate::util::Expression;
 ///   something => ("or other")
 /// };
 /// let illustration = grammar!{
-///   foo => <bar> r("baz") [&vec!["plugh"]] g(qux)
+///   foo => <bar> r("baz") [["plugh"]] g(qux)
 ///   bar => ("baz")
 /// };
 /// ```
@@ -292,19 +292,20 @@ use crate::util::Expression;
 /// converted to a `String` via `to_string`. Unlike the `(literal)` expression,
 /// the characters in the `r(regex)` literal will not be escaped.
 ///
-/// #### `[&vec]`
+/// #### `[vec]`
 ///
 /// ```rust
 /// #  #[macro_use] extern crate pidgin;
 /// grammar!{
-///   foo => [&vec!["cat", "dog", "tortoise"]]
+///   foo => [["cat", "dog", "tortoise"]]
 /// };
 /// ```
 ///
 /// An element delimited by square brackets introduces a list of elements to
 /// be condensed into a regular expression. Meta-characters in the items in the
 /// list will be escaped, but white space may be normalized. The square brackets
-/// must contain a Rust expression of type `&[&str]`.
+/// must contain a Rust expression to which `.iter().map(|i| i.to_string()).collect()`
+/// may be applied to get a `Vec` of `String`s.
 ///
 /// #### `g(grammar)`
 ///
@@ -332,8 +333,8 @@ use crate::util::Expression;
 ///   name       => <east_asian> | <western>
 ///   east_asian -> <surname> <given_name>
 ///   western    -> <given_name> <surname>
-///   given_name => (?bB) [&vec!["Sally", "Wataru", "Jo"]]
-///   surname    => (?bB) [&vec!["Ng", "Smith", "Salasie"]]
+///   given_name => (?bB) [["Sally", "Wataru", "Jo"]]
+///   surname    => (?bB) [["Ng", "Smith", "Salasie"]]
 /// };
 /// grammar!{
 ///   foo => g(names.rule("surname").unwrap())
@@ -378,7 +379,7 @@ use crate::util::Expression;
 ///   foo => <r> | <s>? | <v>* | <g>+
 ///   g   => g(g1){2}   g(g1){3,}   g(g1){4,5}
 ///   s   => ("foo")??   ("bar")*?   ("baz")+?
-///   v   => [&vec!["plugh"]]{6,}?   [&vec!["quux"]]{7,8}?
+///   v   => [["plugh"]]{6,}?   [["quux"]]{7,8}?
 ///   r   => r(r"no suffix for me*")
 /// };
 /// ```
@@ -721,7 +722,7 @@ macro_rules! grammar {
     // conventions of the macro rules have not been followed
     ( @rules $l:expr, $m:expr, $($parts:tt)*) => (
         $(
-            panic!("unused token tree: {}", stringify!($parts))
+            compile_error!(stringify!(unused token $parts))
         )*
     );
 

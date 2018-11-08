@@ -291,9 +291,8 @@ fn vec_rule_with_repetition() {
 
 #[test]
 fn word_bound_left() {
-    let words = vec!["cat", "@cat"];
     let g = grammar!{
-        foo => (?b) [words]
+        foo => (?b) [["cat", "@cat"]]
     };
     let matcher = g.matcher().unwrap();
     assert!(matcher.is_match("cat"));
@@ -305,9 +304,8 @@ fn word_bound_left() {
 
 #[test]
 fn word_bound_right() {
-    let words = vec!["cat", "cat@"];
     let g = grammar!{
-        foo => (?B) [words]
+        foo => (?B) [["cat", "cat@"]]
     };
     let matcher = g.matcher().unwrap();
     assert!(matcher.is_match("cat"));
@@ -319,9 +317,8 @@ fn word_bound_right() {
 
 #[test]
 fn some_space() {
-    let words = vec!["cat a log"];
     let g = grammar!{
-        foo => (?w) [words]
+        foo => (?w) [["cat a log"]]
     };
     let matcher = g.matcher().unwrap();
     assert!(matcher.is_match("cat  a   log"));
@@ -330,9 +327,8 @@ fn some_space() {
 
 #[test]
 fn maybe_space() {
-    let words = vec!["cat a log"];
     let g = grammar!{
-        foo => (?W) [words]
+        foo => (?W) [["cat a log"]]
     };
     let matcher = g.matcher().unwrap();
     assert!(matcher.is_match("cat  a   log"));
@@ -372,7 +368,7 @@ fn optional_space_with_repetition() {
 #[test]
 fn foreign_grammar() {
     let g = grammar!{
-        thing => (?bB) [vec!["cat", "crouton", "caveman", "pomegranate"]]
+        thing => (?bB) [["cat", "crouton", "caveman", "pomegranate"]]
     };
     let g = grammar!{
         things -> g(g)+
@@ -411,11 +407,11 @@ fn complex_example() {
         month_day_year -> <month> <mday> (",") <year>
 
         // leaves
-        mday     => (?bB) [mdays.iter().map(|s| s.as_str()).collect::<Vec<_>>()]
-        modifier => (?bB) [vec!["this", "last", "next"]]
-        unit     => (?bB) [vec!["day", "week", "month", "year"]]
+        mday     => (?bB) [mdays]
+        modifier => (?bB) [["this", "last", "next"]]
+        unit     => (?bB) [["day", "week", "month", "year"]]
         year     => r(r"\b\d{4}\b")
-        weekday  => (?bB) [vec![
+        weekday  => (?bB) [[
                             "sunday",
                             "monday",
                             "tuesday",
@@ -424,7 +420,7 @@ fn complex_example() {
                             "friday",
                             "saturday"
                           ]]
-        month    => (?bB) [vec![
+        month    => (?bB) [[
                             "january",
                             "february",
                             "march",
@@ -453,9 +449,9 @@ fn complex_example() {
 fn using_sub_rule() {
     let library = grammar!{
         books => <cat> | <dog> | <camel>
-        cat   => [vec!["persian", "siamese", "calico", "tabby"]]
-        dog   => [vec!["dachshund", "chihuahua", "corgi", "malamute"]]
-        camel => [vec!["bactrian", "dromedary"]]
+        cat   => [["persian", "siamese", "calico", "tabby"]]
+        dog   => [["dachshund", "chihuahua", "corgi", "malamute"]]
+        camel => [["bactrian", "dromedary"]]
     };
     let g = grammar!{
         seen -> ("I saw a") g(library.rule("cat").unwrap()) (".")
@@ -468,7 +464,7 @@ fn using_sub_rule() {
 fn rx() {
     let g = grammar!{
         foo -> r(r"\A") <bar> r(r"\z")
-        bar => (?i) [vec!["cat", "camel", "corn"]]
+        bar => (?i) [["cat", "camel", "corn"]]
     };
     let rx = g.rx().unwrap().to_string();
     assert_eq!(r"\A(?i:\s*c(?:orn|a(?:t|mel)))\s*\z", rx);
@@ -549,7 +545,7 @@ fn messing_about() {
                     .flat_map(|s| vec![s, &s[0..2], &s[0..3]])
                     .collect::<Vec<_>>()
             ]
-        weekday     => (?-i) [vec!["M", "T", "W", "R", "F", "S", "U"]]
+        weekday     => (?-i) [["M", "T", "W", "R", "F", "S", "U"]]
         monthday    => [(1..=31).into_iter().collect::<Vec<_>>()]
         numeric_day => [
                 (1..=31)
