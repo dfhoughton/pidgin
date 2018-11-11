@@ -30,96 +30,96 @@ expressive regular expressions without obscuring your intention.
 extern crate pidgin;
 
 fn experiment() -> Result<(), Box<Error>> {
-	let date = grammar!{
-	
-		// comments are legal in grammars
-	
-	    (?ibB)   // default flags for all rules -- case insensitive and enforce leading and trailing word boundaries
-	
-		// the master rule; it has multiple alternates
-	    date -> <weekday> (",") <month> <monthday> (",") <year>
-	    date -> <month> <monthday> | <weekday> | <monthday> <month> <year>
-	    date -> <month> <monthday> (",") <year>
-	    date -> <numeric_date>
-	
-		// sub-rules
-	
-	    numeric_date -> <year> ("/") <numeric_month> ("/") <numeric_day>
-	    numeric_date -> <year> ("-") <numeric_month> ("-") <numeric_day>
-	    numeric_date -> <numeric_month> ("/") <numeric_day> ("/") <year>
-	    numeric_date -> <numeric_month> ("-") <numeric_day> ("-") <year>
-	    numeric_date -> <numeric_day> ("/") <numeric_month> ("/") <year>
-	    numeric_date -> <numeric_day> ("-") <numeric_month> ("-") <year>
-	
-	    year    => r(r"\b[12][0-9]{3}|[0-9]{2}\b")
-	    weekday => [
-	            "Sunday Monday Tuesday Wednesday Thursday Friday Saturday"
-	                .split(" ")
-	                .into_iter()
-	                .flat_map(|s| vec![s, &s[0..2], &s[0..3]])
-	                .collect::<Vec<_>>()
-	        ]
-	    weekday     => (?-i) [["M", "T", "W", "R", "F", "S", "U"]]
-	    monthday    => [(1..=31).into_iter().collect::<Vec<_>>()]
-	    numeric_day => [
-	            (1..=31)
-	                .into_iter()
-	                .flat_map(|i| vec![i.to_string(), format!("{:02}", i)])
-	                .collect::<Vec<_>>()
-	        ]
-	    month => [
-	        vec![
-	            "January",
-	            "February",
-	            "March",
-	            "April",
-	            "May",
-	            "June",
-	            "July",
-	            "August",
-	            "September",
-	            "October",
-	            "November",
-	            "December",
-	        ].into_iter().flat_map(|s| vec![s, &s[0..3]]).collect::<Vec<_>>()
-	      ]
-	    numeric_month => [
-	            (1..=31)
-	                .into_iter()
-	                .flat_map(|i| vec![i.to_string(), format!("{:02}", i)])
-	                .collect::<Vec<_>>()
-	        ]
-	};
+    let date = grammar!{
+    
+        // comments are legal in grammars
+    
+        (?ibB)   // default flags for all rules -- case insensitive and enforce leading and trailing word boundaries
+    
+        // the master rule; it has multiple alternates
+        date -> <weekday> (",") <month> <monthday> (",") <year>
+        date -> <month> <monthday> | <weekday> | <monthday> <month> <year>
+        date -> <month> <monthday> (",") <year>
+        date -> <numeric_date>
+    
+        // sub-rules
+    
+        numeric_date -> <year> ("/") <numeric_month> ("/") <numeric_day>
+        numeric_date -> <year> ("-") <numeric_month> ("-") <numeric_day>
+        numeric_date -> <numeric_month> ("/") <numeric_day> ("/") <year>
+        numeric_date -> <numeric_month> ("-") <numeric_day> ("-") <year>
+        numeric_date -> <numeric_day> ("/") <numeric_month> ("/") <year>
+        numeric_date -> <numeric_day> ("-") <numeric_month> ("-") <year>
+    
+        year    => r(r"\b[12][0-9]{3}|[0-9]{2}\b")
+        weekday => [
+                "Sunday Monday Tuesday Wednesday Thursday Friday Saturday"
+                    .split(" ")
+                    .into_iter()
+                    .flat_map(|s| vec![s, &s[0..2], &s[0..3]])
+                    .collect::<Vec<_>>()
+            ]
+        weekday     => (?-i) [["M", "T", "W", "R", "F", "S", "U"]]
+        monthday    => [(1..=31).into_iter().collect::<Vec<_>>()]
+        numeric_day => [
+                (1..=31)
+                    .into_iter()
+                    .flat_map(|i| vec![i.to_string(), format!("{:02}", i)])
+                    .collect::<Vec<_>>()
+            ]
+        month => [
+                vec![
+                    "January",
+                    "February",
+                    "March",
+                    "April",
+                    "May",
+                    "June",
+                    "July",
+                    "August",
+                    "September",
+                    "October",
+                    "November",
+                    "December",
+                ].into_iter().flat_map(|s| vec![s, &s[0..3]]).collect::<Vec<_>>()
+            ]
+        numeric_month => [
+                (1..=31)
+                    .into_iter()
+                    .flat_map(|i| vec![i.to_string(), format!("{:02}", i)])
+                    .collect::<Vec<_>>()
+            ]
+    };
 
-	// compile this into a matcher
-	// (uncompiled grammar's can be used as elements of other grammars)
-	let matcher = date.matcher()?;
-	
-	// we let whitespace vary
-	assert!(matcher.is_match(" June   6,    1969 "));
+    // compile this into a matcher
+    // (uncompiled grammar's can be used as elements of other grammars)
+    let matcher = date.matcher()?;
+    
+    // we let whitespace vary
+    assert!(matcher.is_match(" June   6,    1969 "));
 
-	// we made it case-insensitive
-	assert!(matcher.is_match("june 6, 1969"));
+    // we made it case-insensitive
+    assert!(matcher.is_match("june 6, 1969"));
 
-	// but we want to respect word boundaries
-	assert!(!matcher.is_match("jejune 6, 1969"));
+    // but we want to respect word boundaries
+    assert!(!matcher.is_match("jejune 6, 1969"));
 
-	// we can inspect the parse tree
-	let m = matcher.parse("2018/10/6").unwrap();
-	assert!(m.name("numeric_date").is_some());
-	assert_eq!(m.name("year").unwrap().as_str(), "2018");
+    // we can inspect the parse tree
+    let m = matcher.parse("2018/10/6").unwrap();
+    assert!(m.name("numeric_date").is_some());
+    assert_eq!(m.name("year").unwrap().as_str(), "2018");
 
-	let m = matcher.parse("Friday").unwrap();
-	assert!(!m.name("numeric_date").is_some());
-	assert!(m.name("weekday").is_some());
+    let m = matcher.parse("Friday").unwrap();
+    assert!(!m.name("numeric_date").is_some());
+    assert!(m.name("weekday").is_some());
 
-	// still more crazy things we allow
-	assert!(matcher.is_match("F"));
-	assert!(matcher.is_match("friday"));
-	assert!(matcher.is_match("Fri"));
+    // still more crazy things we allow
+    assert!(matcher.is_match("F"));
+    assert!(matcher.is_match("friday"));
+    assert!(matcher.is_match("Fri"));
 
-	// but we said single-letter days had to be capitalized
-	assert!(!matcher.is_match("f"));
+    // but we said single-letter days had to be capitalized
+    assert!(!matcher.is_match("f"));
 
     Ok(())
 }
@@ -149,8 +149,8 @@ the name "foo" is reused. The following grammar produces just this situation:
 
 ```rust
 grammar!{
-	TOP -> <foo> ("bar") <foo>
-	foo => r("(?P<baz>foo)")
+    TOP -> <foo> ("bar") <foo>
+    foo => r("(?P<baz>foo)")
 };
 ```
 
