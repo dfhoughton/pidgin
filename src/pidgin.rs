@@ -12,24 +12,6 @@ use std::collections::{BTreeMap, BTreeSet};
 /// alternates should be bounded left and right by word boundaries, string
 /// boundaries, or line boundaries, and the set of regex flags -- case-sensitivity,
 /// for instance, that will govern the rule it produces.
-///
-/// Defined rules will be used to process the new rule's alternates. If there is
-/// a "foo" rule, the alternate `"foo foo"` will be understood to require that
-/// this "foo" rule match twice with a space between matches.
-///
-/// Because rule names can overlap, they are applied longest to shortest. If there
-/// is both a "foo" rule and a "f" rule, "f foo" will be understood to involve
-/// one match for each -- the "f" rule only gets the single "f".
-///
-/// In addition to rules identified like this by a name, there are also regex
-/// rules. These are substituted into alternates wherever their definitional
-/// pattern matches. Regex rules are sought in alternates only in what is left
-/// over after ordinary rules are found. Regex rules are applied in inverse
-/// order by the length of their string representation and then in alphabetical
-/// order. They may optionally also have names.
-///
-/// `Pidgin` has numerous configuration methods which consume and return their
-/// invocant.
 
 #[derive(Clone, Debug)]
 pub(crate) struct Pidgin {
@@ -148,42 +130,34 @@ impl Pidgin {
             }
         }
     }
-    pub(crate) fn case_insensitive(mut self, case: bool) -> Pidgin {
+    pub(crate) fn case_insensitive(&mut self, case: bool) {
         self.flags.case_insensitive = case;
-        self
     }
-    pub(crate) fn multi_line(mut self, case: bool) -> Pidgin {
+    pub(crate) fn multi_line(&mut self, case: bool) {
         self.flags.multi_line = case;
-        self
     }
-    pub(crate) fn dot_all(mut self, case: bool) -> Pidgin {
+    pub(crate) fn dot_all(&mut self, case: bool) {
         self.flags.dot_all = case;
-        self
     }
-    pub(crate) fn unicode(mut self, case: bool) -> Pidgin {
+    pub(crate) fn unicode(&mut self, case: bool) {
         self.flags.unicode = case;
-        self
     }
-    pub(crate) fn reverse_greed(mut self, case: bool) -> Pidgin {
+    pub(crate) fn reverse_greed(&mut self, case: bool) {
         self.flags.reverse_greed = case;
-        self
     }
-    pub(crate) fn normalize_whitespace(mut self, required: bool) -> Pidgin {
+    pub(crate) fn normalize_whitespace(&mut self, required: bool) {
         self.remove_rx_rule(r"\s+").unwrap();
         if required {
             self.foreign_rx_rule(r"\s+", r"\s+", None).unwrap();
         } else {
             self.foreign_rx_rule(r"\s+", r"\s*", None).unwrap();
         }
-        self
     }
-    pub(crate) fn left_word_bound(mut self) -> Pidgin {
+    pub(crate) fn left_word_bound(&mut self) {
         self.left = true;
-        self
     }
-    pub(crate) fn right_word_bound(mut self) -> Pidgin {
+    pub(crate) fn right_word_bound(&mut self) {
         self.right = true;
-        self
     }
     fn add_boundary_symbols(&self, left: bool, right: bool, phrase: &str) -> Vec<Expression> {
         lazy_static! {

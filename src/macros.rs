@@ -88,7 +88,7 @@ use crate::util::Expression;
 ///   dog => [["dachshund", "malamute"]]
 /// };
 /// ```
-/// 
+///
 /// ## Order
 ///
 /// The macro requires only that you provide a master rule and that the remaining
@@ -96,14 +96,14 @@ use crate::util::Expression;
 /// and that there is no recursion. Recursion will cause a panic.
 ///
 /// ## Conventions
-/// 
+///
 /// ### Flags
 ///
 /// Flags take the form `(?<on>-<off>)` just as in regular expressions. They may
 /// appear before all the rules in the grammar as defaults and after the arrow
 /// of a particular rule, in which case they apply to that rule alone. Rules
 /// do not inherit the flags of rules they are contained in. In
-/// 
+///
 /// ```rust
 /// #  #[macro_use] extern crate pidgin;
 /// grammar!{
@@ -111,35 +111,35 @@ use crate::util::Expression;
 ///   cat => ("cat")
 /// };
 /// ```
-/// 
+///
 /// the `<cat>` rule is not case-insensitive.
 ///
 /// The flags understood are the standard regex flags minus `x` plus a few
 /// peculiar to grammars.
-/// 
+///
 /// #### `b` and `B`
-/// 
+///
 /// The `b` and `B` flags correspond to the `\b` regex anchor, the `b` flag being
 /// for the left word boundary anchor and the `B` flag for the right. They only
 /// have an effect on [`("literal")`](#literal) and [`[vec]`](#vec) elements of a
 /// rule, and only when these elements are on the left or right margin of their
 /// rule.
-/// 
+///
 /// ```rust
 /// #  #[macro_use] extern crate pidgin;
 /// grammar!{
 ///   foo -> (?bB) ("cat") ("dog") ("donkey")
 /// };
-/// 
+///
 /// ```
 /// will produce a regex equivalent to `\bcat\s*dog\s*donkey\b`.
-/// 
+///
 /// #### `w` and `W`
-/// 
+///
 /// The `w` and `W` flags, which are mutually incompatible, control the normalization
 /// of whitespace in [`[vec]`](#vec) elements. `w` means "some whitespace"
 /// and `W` means "maybe some whitespace".
-/// 
+///
 /// ```rust
 /// #  #[macro_use] extern crate pidgin;
 /// grammar!{
@@ -147,14 +147,14 @@ use crate::util::Expression;
 /// };
 /// ```
 /// is equivalent to `cat\s+a\s+log`.
-/// 
+///
 /// ```rust
 /// #  #[macro_use] extern crate pidgin;
 /// grammar!{
 ///   foo => (?W) [["cat a log"]]
 /// };
 /// ```
-/// 
+///
 /// is equivalent to `cat\s*a\s*log`.
 ///
 /// As in regular expressions, the order of flags, or repetition of flags, in
@@ -436,7 +436,7 @@ use crate::util::Expression;
 /// As with regexes, the definition of grammars is not something you want to do
 /// repeatedly at runtime. The best practice is to compile them once and then
 /// reuse them with the [`lazy_static`](https://crates.io/crates/lazy_static) macro.
-/// 
+///
 /// [`Grammar`]: ../pidgin/struct.Grammar.html
 /// [`Grammar::rule`]: ../pidgin/struct.Grammar.html#method.rule
 /// [`regex`]: https://docs.rs/regex/
@@ -971,30 +971,30 @@ impl MacroFlags {
     // make the pidgin suit the flags
     pub(crate) fn adjust(&self, mut p: Pidgin) -> Pidgin {
         if self.case_insensitive.is_some() {
-            p = p.case_insensitive(self.case_insensitive.unwrap());
+            p.case_insensitive(self.case_insensitive.unwrap());
         }
         if self.multi_line.is_some() {
-            p = p.multi_line(self.multi_line.unwrap());
+            p.multi_line(self.multi_line.unwrap());
         }
         if self.unicode.is_some() {
-            p = p.unicode(self.unicode.unwrap());
+            p.unicode(self.unicode.unwrap());
         }
         if self.reverse_greed.is_some() {
-            p = p.reverse_greed(self.reverse_greed.unwrap());
+            p.reverse_greed(self.reverse_greed.unwrap());
         }
         if self.dot_all.is_some() {
-            p = p.dot_all(self.dot_all.unwrap());
+            p.dot_all(self.dot_all.unwrap());
         }
         if self.whitespace_some.unwrap_or_default() {
-            p = p.normalize_whitespace(true);
+            p.normalize_whitespace(true);
         } else if self.whitespace_maybe.unwrap_or_default() {
-            p = p.normalize_whitespace(false);
+            p.normalize_whitespace(false);
         }
         if self.word_left.unwrap_or_default() {
-            p = p.left_word_bound();
+            p.left_word_bound();
         }
         if self.word_right.unwrap_or_default() {
-            p = p.right_word_bound();
+            p.right_word_bound();
         }
         p
     }
