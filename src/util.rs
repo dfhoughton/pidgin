@@ -503,11 +503,3 @@ impl PartialEq for Expression {
 }
 
 impl Eq for Expression {}
-
-// boundary patterns to attach to words
-#[derive(Clone, Debug)]
-pub(crate) enum Boundary {
-    String,
-    Line,
-    Word,
-}

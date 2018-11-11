@@ -2,6 +2,13 @@
 #![recursion_limit = "256"]
 #[macro_use]
 extern crate pidgin;
+use pidgin::Grammar;
+extern crate regex;
+use regex::Regex;
+
+fn count_matches(rx: &str, g: &Grammar) -> usize {
+	Regex::new(rx).unwrap().find_iter(&g.rx().unwrap().to_string()).count()
+}
 
 #[test]
 fn foo_bar() {
@@ -628,13 +635,140 @@ fn parse_example() {
 }
 
 #[test]
-fn to_string_example() {
-	// FIXME
-	/*let g = grammar!{
-        foo -> <bar> <baz> | <baz> <bar>
-        bar => ("baz")
-	    baz => ("bar")
-    };
-    println!("{}", g.to_string());
-	assert!(false);*/
+fn rule_example() {
+	let m = grammar!{
+		foo => ("bar")
+	}.matcher().unwrap().parse("   bar   ").unwrap();
+	assert_eq!("foo", m.rule());
+}
+
+#[test]
+fn simple_alternation() {
+	let words = vec!["cat", "dog", "tortoise"];
+	let g = grammar!{ top => [&words] };
+	let m = g.matcher().unwrap();
+	for w in words {
+		assert!(m.is_match(w));
+	}
+}
+
+#[test]
+fn common_suffix() {
+	let words = vec!["cats", "dogs"];
+	let g = grammar!{ top => [&words] };
+	let m = g.matcher().unwrap();
+	for w in words {
+		assert!(m.is_match(w));
+	}
+	assert_eq!(1, count_matches("s", &g));
+}
+
+#[test]
+fn common_prefix() {
+	let words = vec!["scat", "spore"];
+	let g = grammar!{ top => [&words] };
+	let m = g.matcher().unwrap();
+	for w in words {
+		assert!(m.is_match(w));
+	}
+	assert_eq!(1, count_matches("s", &g));
+}
+
+#[test]
+fn both_prefix_and_suffix() {
+	let words = vec!["scats", "spores"];
+	let g = grammar!{ top => [&words] };
+	let m = g.matcher().unwrap();
+	for w in words {
+		assert!(m.is_match(w));
+	}
+	assert_eq!(2, count_matches("s", &g));
+}
+
+#[test]
+fn short_character_class() {
+	let words = vec!["a", "b"];
+	let g = grammar!{ top => [&words] };
+	let m = g.matcher().unwrap();
+	for w in words {
+		assert!(m.is_match(w));
+	}
+	assert_eq!(1, count_matches(r"\[ab\]", &g));
+}
+
+#[test]
+fn long_character_class() {
+	let words = vec!["a", "b", "c"];
+	let g = grammar!{ top => [&words] };
+	let m = g.matcher().unwrap();
+	for w in words {
+		assert!(m.is_match(w));
+	}
+	assert_eq!(1, count_matches(r"\[a-c\]", &g));
+}
+
+#[test]
+fn complex_character_class() {
+	let words = vec!["a", "b", "c", "g"];
+	let g = grammar!{ top => [&words] };
+	let m = g.matcher().unwrap();
+	for w in words {
+		assert!(m.is_match(w));
+	}
+	assert_eq!(1, count_matches(r"\[a-cg\]", &g));
+}
+
+#[test]
+fn complex_character_class_alternation() {
+	let words = vec!["Ant", "a", "b", "c", "g"];
+	let g = grammar!{ top => [&words] };
+	let m = g.matcher().unwrap();
+	for w in words {
+		assert!(m.is_match(w));
+	}
+	assert_eq!(1, count_matches(r"\[a-cg\]\|Ant", &g));
+}
+
+#[test]
+fn small_repeat_ignored() {
+	let words = vec!["aaa"];
+	let g = grammar!{ top => [&words] };
+	let m = g.matcher().unwrap();
+	for w in words {
+		assert!(m.is_match(w));
+	}
+	assert_eq!(1, count_matches(r"aaa", &g));
+}
+
+#[test]
+fn longer_repeat_found() {
+	let words = vec!["aaaa"];
+	let g = grammar!{ top => [&words] };
+	let m = g.matcher().unwrap();
+	for w in words {
+		assert!(m.is_match(w));
+	}
+	assert_eq!(1, count_matches(r"a\{4\}", &g));
+}
+
+#[test]
+fn complex_repeat() {
+    let words = vec!["aaaabbbbaaaabbbb"];
+	let g = grammar!{ top => [&words] };
+	let m = g.matcher().unwrap();
+	for w in words {
+		assert!(m.is_match(w));
+	}
+    assert_eq!("(?:a{4}b{4}){2}", &g.to_string());
+}
+
+#[test]
+fn has_test() {
+	let g = grammar!{
+		TOP    => <animal> | <thing>
+		animal => [["cat", "dog", "camel"]]
+		thing  => [["carpet", "crate", "cartoon"]]
+	};
+    let m = g.matcher().unwrap();
+    assert!(m.parse("cat").unwrap().has("animal"));
 }

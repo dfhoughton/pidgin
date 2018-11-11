@@ -5,11 +5,14 @@ use regex::{Captures, Error, Regex};
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::HashMap;
 
-/// This is functionally equivalent to a `Regex`: you can use it repeatedly to
+/// This is functionally equivalent to a [`Regex`]: you can use it repeatedly to
 /// search a string. It cannot itself be used directly to split strings, but
 /// its regular expression is public and may be so used. It improves on regular
-/// expressions in that the `Match` object it returns is the root node in a
+/// expressions in that the [`Match`] object it returns is the root node in a
 /// parse tree, so its matches preserve parse structure.
+/// 
+/// [`Regex`]: ../regex/struct.Regex.html
+/// [`Match`]: ../pidgin/struct.Match.html
 #[derive(Debug)]
 pub struct Matcher {
     /// The `Regex` used for parsing.
@@ -218,13 +221,15 @@ impl Matcher {
     }
 }
 
-/// This is a node in a parse tree. It is functionally similar to `regex::Match`,
+/// This is a node in a parse tree. It is functionally similar to [`regex::Match`],
 /// in fact providing much the same API, but unlike a `regex::Match` a `pidgin::Match`
 /// always corresponds to some rule, it knows what rule it corresponds to,
 /// and it records any sub-matches involved in its parsing.
 ///
 /// The lifetime parameter `'t` represents the lifetime of the `&str` matched
 /// against.
+/// 
+/// [`regex::Match`]: ../regex/struct.Match.html
 #[derive(Debug, Clone)]
 pub struct Match<'t> {
     rule: String,
@@ -236,18 +241,74 @@ pub struct Match<'t> {
 
 impl<'t> Match<'t> {
     /// Returns the matched text.
+	///
+	/// # Examples
+	///  
+	/// ```rust
+    /// # #[macro_use] extern crate pidgin;
+    /// # use std::error::Error;
+    /// # fn demo() -> Result<(), Box<Error>> {
+	/// let m = grammar!{
+	/// 	foo => ("bar")
+	/// }.matcher()?.parse("   bar   ").unwrap();
+	/// 
+	/// assert_eq!("bar", m.as_str());
+	/// # Ok(()) }
+	/// ```
     pub fn as_str(&self) -> &'t str {
         &self.text[self.start..self.end]
     }
     /// Returns the starting offset of the match.
+	///
+	/// # Examples
+	///  
+	/// ```rust
+    /// # #[macro_use] extern crate pidgin;
+    /// # use std::error::Error;
+    /// # fn demo() -> Result<(), Box<Error>> {
+	/// let m = grammar!{
+	/// 	foo => ("bar")
+	/// }.matcher()?.parse("   bar   ").unwrap();
+	/// 
+	/// assert_eq!(3, m.start());
+	/// # Ok(()) }
+	/// ```
     pub fn start(&self) -> usize {
         self.start
     }
     /// Returns the ending offset of the match.
+	///
+	/// # Examples
+	///  
+	/// ```rust
+    /// # #[macro_use] extern crate pidgin;
+    /// # use std::error::Error;
+    /// # fn demo() -> Result<(), Box<Error>> {
+	/// let m = grammar!{
+	/// 	foo => ("bar")
+	/// }.matcher()?.parse("   bar   ").unwrap();
+	/// 
+	/// assert_eq!(6, m.end());
+	/// # Ok(()) }
+	/// ```
     pub fn end(&self) -> usize {
         self.end
     }
     /// Returns the grammar rule matched.
+	///
+	/// # Examples
+	///  
+	/// ```rust
+    /// # #[macro_use] extern crate pidgin;
+    /// # use std::error::Error;
+    /// # fn demo() -> Result<(), Box<Error>> {
+	/// let m = grammar!{
+	/// 	foo => ("bar")
+	/// }.matcher()?.parse("   bar   ").unwrap();
+	/// 
+	/// assert_eq!("foo", m.rule());
+	/// # Ok(()) }
+	/// ```
     pub fn rule(&self) -> &str {
         &self.rule
     }

@@ -2,12 +2,12 @@
 extern crate lazy_static;
 #[macro_use]
 extern crate criterion;
+#[macro_use]
 extern crate pidgin;
 extern crate rand;
 extern crate regex;
 
 use criterion::{Criterion, Fun};
-use pidgin::Pidgin;
 use rand::distributions::Alphanumeric;
 use rand::prelude::*;
 use regex::Regex;
@@ -58,14 +58,9 @@ lazy_static! {
             + r")\z"),
     )
     .unwrap();
-    static ref PIDGIN_RX_BOUNDED: Regex = Regex::new(
-        &Pidgin::new()
-            .line_bound()
-            .add(&GOOD.iter().map(|s| s.as_str()).collect::<Vec<&str>>(),)
-            .compile()
-            .to_string()
-    )
-    .unwrap();
+    static ref PIDGIN_RX_BOUNDED: Regex =grammar!{
+        TOP => r(r"\A") [&GOOD] r(r"\z")
+    }.rx().unwrap();
     static ref NAIVE_RX_UNBOUNDED: Regex = Regex::new(
         &GOOD
             .iter()
@@ -74,13 +69,9 @@ lazy_static! {
             .join("|")
     )
     .unwrap();
-    static ref PIDGIN_RX_UNBOUNDED: Regex = Regex::new(
-        &Pidgin::new()
-            .add(&GOOD.iter().map(|s| s.as_str()).collect::<Vec<&str>>(),)
-            .compile()
-            .to_string()
-    )
-    .unwrap();
+    static ref PIDGIN_RX_UNBOUNDED: Regex = grammar!{
+        TOP => [&GOOD]
+    }.rx().unwrap();
 }
 
 fn naive_vs_pidgin(c: &mut Criterion) {

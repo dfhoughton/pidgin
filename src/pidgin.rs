@@ -1,8 +1,7 @@
 extern crate regex;
 use crate::grammar::Grammar;
-use crate::matching::Matcher;
 use crate::util::{
-    character_class_escape, is_atomic, Boundary, CharRange, Expression, Flags, Symbol,
+    character_class_escape, is_atomic, CharRange, Expression, Flags, Symbol,
 };
 use regex::{Error, Regex};
 use std::cmp::{Ord, Ordering};
@@ -35,8 +34,8 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Clone, Debug)]
 pub(crate) struct Pidgin {
     flags: Flags,
-    left: Option<Boundary>,
-    right: Option<Boundary>,
+    left: bool,
+    right: bool,
     symbols: BTreeMap<Symbol, Vec<Expression>>,
     phrases: Vec<String>,
 }
@@ -48,8 +47,8 @@ impl Pidgin {
     pub(crate) fn new() -> Pidgin {
         Pidgin {
             flags: Flags::defaults(),
-            left: None,
-            right: None,
+            left: false,
+            right: false,
             symbols: BTreeMap::new(),
             phrases: Vec::new(),
         }
@@ -90,39 +89,10 @@ impl Pidgin {
             stingy: false,
         }
     }
-    /// A convenience method equivalent to `add(&words).compile()`.
-    pub(crate) fn grammar(&mut self, words: &[&str]) -> Grammar {
-        self.add(words);
-        self.compile()
-    }
     pub(crate) fn rule(&mut self, name: &str, g: &Grammar) {
         let mut g = g.clone();
         g.name = Some(name.to_string());
         self.add_symbol(Symbol::S(name.to_string()), Expression::Grammar(g, false));
-    }
-    pub(crate) fn foreign_rule(&mut self, name: &str, pattern: &str) -> Result<(), Error> {
-        match Regex::new(pattern) {
-            Err(e) => Err(e),
-            Ok(_) => {
-                let mut flags = Flags::defaults();
-                flags.enclosed = !is_atomic(pattern);
-                self.add_symbol(
-                    Symbol::S(name.to_string()),
-                    Expression::Grammar(
-                        Grammar {
-                            flags,
-                            name: Some(name.to_string()),
-                            sequence: vec![Expression::Part(pattern.to_string(), false)],
-                            lower_limit: None,
-                            upper_limit: None,
-                            stingy: false,
-                        },
-                        false,
-                    ),
-                );
-                Ok(())
-            }
-        }
     }
     pub(crate) fn foreign_rx_rule(
         &mut self,
@@ -156,9 +126,8 @@ impl Pidgin {
             Err(e) => Err(e),
         }
     }
-    pub(crate) fn build_rule(&mut self, name: &str, components: Vec<RuleFragment>) {
-        let right_limit = components.len() - 1;
-        let g = Grammar {
+	pub(crate) fn build_grammar(&mut self, name: &str, components: Vec<Grammar>) -> Grammar {
+        Grammar {
             name: Some(name.to_string()),
             flags: self.flags.clone(),
             lower_limit: None,
@@ -166,25 +135,10 @@ impl Pidgin {
             stingy: false,
             sequence: components
                 .iter()
-                .enumerate()
-                .map(|(i, f)| match f {
-                    RuleFragment::G(g) => Expression::Grammar(g.clone(), false),
-                    RuleFragment::S(s) => {
-                        self.phrases.clear();
-                        self.phrases.push(s.clone());
-                        Expression::Grammar(
-                            self.compile_bounded(i == 0, i == right_limit, false),
-                            false,
-                        )
-                    }
-                })
+                .map(|g| Expression::Grammar(g.clone(), false))
                 .collect(),
-        };
-        self.add_symbol(Symbol::S(name.to_string()), Expression::Grammar(g, false));
-    }
-    pub(crate) fn remove_rule(&mut self, name: &str) {
-        self.symbols.remove(&Symbol::S(name.to_string()));
-    }
+        }
+	}
     pub(crate) fn remove_rx_rule(&mut self, name: &str) -> Result<(), Error> {
         match Regex::new(name) {
             Err(e) => Err(e),
@@ -193,10 +147,6 @@ impl Pidgin {
                 Ok(())
             }
         }
-    }
-    pub(crate) fn clear(&mut self) {
-        self.symbols.clear();
-        self.phrases.clear();
     }
     pub(crate) fn case_insensitive(mut self, case: bool) -> Pidgin {
         self.flags.case_insensitive = case;
@@ -214,10 +164,6 @@ impl Pidgin {
         self.flags.unicode = case;
         self
     }
-    pub(crate) fn enclosed(mut self, case: bool) -> Pidgin {
-        self.flags.enclosed = case;
-        self
-    }
     pub(crate) fn reverse_greed(mut self, case: bool) -> Pidgin {
         self.flags.reverse_greed = case;
         self
@@ -231,70 +177,13 @@ impl Pidgin {
         }
         self
     }
-    pub(crate) fn word_bound(mut self) -> Pidgin {
-        self.left = Some(Boundary::Word);
-        self.right = Some(Boundary::Word);
-        self
-    }
     pub(crate) fn left_word_bound(mut self) -> Pidgin {
-        self.left = Some(Boundary::Word);
+        self.left = true;
         self
     }
     pub(crate) fn right_word_bound(mut self) -> Pidgin {
-        self.right = Some(Boundary::Word);
+        self.right = true;
         self
-    }
-    pub(crate) fn line_bound(mut self) -> Pidgin {
-        self.left = Some(Boundary::Line);
-        self.right = Some(Boundary::Line);
-        self.flags.multi_line = true;
-        self
-    }
-    pub(crate) fn left_line_bound(mut self) -> Pidgin {
-        self.left = Some(Boundary::Line);
-        self.flags.multi_line = true;
-        self
-    }
-    pub(crate) fn right_line_bound(mut self) -> Pidgin {
-        self.right = Some(Boundary::Line);
-        self.flags.multi_line = true;
-        self
-    }
-    pub(crate) fn string_bound(mut self) -> Pidgin {
-        self.left = Some(Boundary::String);
-        self.right = Some(Boundary::String);
-        self
-    }
-    pub(crate) fn left_string_bound(mut self) -> Pidgin {
-        self.left = Some(Boundary::String);
-        self
-    }
-    pub(crate) fn right_string_bound(mut self) -> Pidgin {
-        self.right = Some(Boundary::String);
-        self
-    }
-    pub(crate) fn unbound(mut self) -> Pidgin {
-        self.left = None;
-        self.right = None;
-        self
-    }
-    pub(crate) fn compile_non_capturing(&self) -> Grammar {
-        let g = self.clone().compile().clear_recursive();
-        let sequence = self.recursive_condense_sequence(&g.sequence);
-        Grammar {
-            sequence,
-            name: None,
-            flags: g.flags.clone(),
-            lower_limit: None,
-            upper_limit: None,
-            stingy: false,
-        }
-    }
-    pub(crate) fn rx(words: &[&str]) -> String {
-        Pidgin::new().grammar(words).to_string()
-    }
-    pub(crate) fn matcher(&self) -> Result<Matcher, Error> {
-        self.clone().compile().matcher()
     }
     fn add_boundary_symbols(&self, left: bool, right: bool, phrase: &str) -> Vec<Expression> {
         lazy_static! {
@@ -302,24 +191,18 @@ impl Pidgin {
             static ref ASCII_B: Regex = Regex::new(r"(?-U)\w").unwrap();
         }
         let lb = if left {
-            if let Some(b) = &self.left {
-                match b {
-                    Boundary::Word => {
-                        if phrase.len() > 0 {
-                            let c = phrase[0..1].to_string();
-                            let is_boundary = self.flags.unicode && UNICODE_B.is_match(&c)
-                                || !self.flags.unicode && ASCII_B.is_match(&c);
-                            if is_boundary {
-                                Some(Expression::Part(String::from(r"\b"), false))
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
+            if self.left {
+                if phrase.len() > 0 {
+                    let c = phrase[0..1].to_string();
+                    let is_boundary = self.flags.unicode && UNICODE_B.is_match(&c)
+                        || !self.flags.unicode && ASCII_B.is_match(&c);
+                    if is_boundary {
+                        Some(Expression::Part(String::from(r"\b"), false))
+                    } else {
+                        None
                     }
-                    Boundary::Line => Some(Expression::Part(String::from("(?m)^"), false)),
-                    Boundary::String => Some(Expression::Part(String::from(r"\A"), false)),
+                } else {
+                    None
                 }
             } else {
                 None
@@ -328,24 +211,18 @@ impl Pidgin {
             None
         };
         let rb = if right {
-            if let Some(b) = &self.right {
-                match b {
-                    Boundary::Word => {
-                        if phrase.len() > 0 {
-                            let c = phrase.chars().last().unwrap().to_string();
-                            let is_boundary = self.flags.unicode && UNICODE_B.is_match(&c)
-                                || !self.flags.unicode && ASCII_B.is_match(&c);
-                            if is_boundary {
-                                Some(Expression::Part(String::from(r"\b"), false))
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
+            if self.right {
+                if phrase.len() > 0 {
+                    let c = phrase.chars().last().unwrap().to_string();
+                    let is_boundary = self.flags.unicode && UNICODE_B.is_match(&c)
+                        || !self.flags.unicode && ASCII_B.is_match(&c);
+                    if is_boundary {
+                        Some(Expression::Part(String::from(r"\b"), false))
+                    } else {
+                        None
                     }
-                    Boundary::Line => Some(Expression::Part(String::from("$"), false)),
-                    Boundary::String => Some(Expression::Part(String::from(r"\z"), false)),
+                } else {
+                    None
                 }
             } else {
                 None
@@ -368,38 +245,6 @@ impl Pidgin {
             self.symbols.insert(s.clone(), Vec::new());
         }
         self.symbols.get_mut(&s).unwrap().push(e);
-    }
-    fn recursive_condense_sequence(&self, v: &Vec<Expression>) -> Vec<Expression> {
-        self.condense(
-            v.iter()
-                .map(|e| self.recursive_condense_expression(e))
-                .collect(),
-        )
-    }
-    fn recursive_condense_expression(&self, e: &Expression) -> Expression {
-        match e {
-            Expression::Grammar(g, b) => {
-                let g = Grammar {
-                    sequence: self.recursive_condense_sequence(&g.sequence),
-                    name: g.name.clone(),
-                    flags: g.flags.clone(),
-                    lower_limit: None,
-                    upper_limit: None,
-                    stingy: false,
-                };
-                Expression::Grammar(g, *b)
-            }
-            Expression::Alternation(v, b) => {
-                Expression::Alternation(self.recursive_condense_sequence(&v), *b)
-            }
-            Expression::Sequence(v, b) => {
-                Expression::Sequence(self.recursive_condense_sequence(&v), *b)
-            }
-            Expression::Repetition(x, n, b) => {
-                Expression::Repetition(Box::new(self.recursive_condense_expression(x)), *n, *b)
-            }
-            _ => e.clone(),
-        }
     }
     // initialize
     fn digest(
@@ -459,7 +304,7 @@ impl Pidgin {
                 rv = nv;
             }
         }
-        if left && self.left.is_some() {
+        if left && self.left {
             let first = rv.remove(0);
             if let Expression::Raw(s) = first {
                 let mut nv = self.add_boundary_symbols(true, false, &s);
@@ -471,7 +316,7 @@ impl Pidgin {
                 rv.insert(0, first);
             }
         }
-        if right && self.right.is_some() {
+        if right && self.right {
             let last = rv.pop().unwrap();
             if let Expression::Raw(s) = last {
                 for e in self.add_boundary_symbols(false, true, &s) {
@@ -842,525 +687,4 @@ impl Pidgin {
         }
         v
     }
-}
-
-/// A small enum needed by `Pidgin::build_rule`.
-#[derive(Debug)]
-pub(crate) enum RuleFragment {
-    S(String),
-    G(Grammar),
-}
-
-/// Constructs a `RuleFragment::S`.
-///
-/// The name is short for "string fragment". This is just a way to construct a
-/// string `RuleFragment` in fewer keystrokes.
-pub(crate) fn sf(string: &str) -> RuleFragment {
-    RuleFragment::S(string.to_string())
-}
-
-/// Constructs a `RuleFragment::G`.
-///
-/// The name is short for "grammar fragment". This is just a way to construct a
-/// grammar `RuleFragment` in fewer keystrokes.
-pub(crate) fn gf(g: Grammar) -> RuleFragment {
-    RuleFragment::G(g)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    extern crate lazy_static;
-    extern crate regex;
-    use regex::Regex;
-
-    fn all_equal(words: &[&str], pattern: &Grammar) {
-        let rx = pattern.matcher().unwrap();
-        for w in words {
-            assert!(rx.is_match(w))
-        }
-    }
-
-    #[test]
-    fn simple_alternation() {
-        let words = vec!["cat", "dog", "camel"];
-        let mut p = Pidgin::new();
-        p.add(&words);
-        let pattern = p.compile();
-        all_equal(&words, &pattern);
-    }
-
-    #[test]
-    fn common_suffix() {
-        let words = vec!["cats", "dogs"];
-        let mut p = Pidgin::new();
-        p.add(&words);
-        let pattern = p.compile();
-        assert!(pattern.to_string().as_str().ends_with("s"));
-        all_equal(&words, &pattern);
-    }
-
-    #[test]
-    fn common_prefix() {
-        let words = vec!["scat", "spore"];
-        let mut p = Pidgin::new();
-        p.add(&words);
-        let pattern = p.compile();
-        assert!(pattern.to_string().as_str().starts_with("s"));
-        all_equal(&words, &pattern);
-    }
-
-    #[test]
-    fn both_prefix_and_suffix() {
-        let words = vec!["scats", "spores"];
-        let mut p = Pidgin::new();
-        p.add(&words);
-        let pattern = p.compile();
-        let rx = pattern.to_string();
-        assert!(rx.as_str().starts_with("s"));
-        assert!(rx.as_str().ends_with("s"));
-        all_equal(&words, &pattern);
-    }
-
-    #[test]
-    fn short_character_class() {
-        let words = vec!["a", "b"];
-        let mut p = Pidgin::new();
-        p.add(&words);
-        let pattern = p.compile();
-        assert_eq!("[ab]", &pattern.to_string());
-        all_equal(&words, &pattern);
-    }
-
-    #[test]
-    fn long_character_class() {
-        let words = vec!["a", "b", "c"];
-        let mut p = Pidgin::new();
-        p.add(&words);
-        let pattern = p.compile();
-        assert_eq!("[a-c]", &pattern.to_string());
-        all_equal(&words, &pattern);
-    }
-
-    #[test]
-    fn complex_character_class() {
-        let words = vec!["a", "b", "c", "g"];
-        let mut p = Pidgin::new();
-        p.add(&words);
-        let pattern = p.compile();
-        assert_eq!("[a-cg]", &pattern.to_string());
-        all_equal(&words, &pattern);
-    }
-
-    #[test]
-    fn character_class_in_alternation() {
-        let words = vec!["Ant", "a", "b", "c", "g"];
-        let mut p = Pidgin::new();
-        p.add(&words);
-        let pattern = p.compile();
-        assert_eq!("(?:[a-cg]|Ant)", &pattern.to_string());
-        all_equal(&words, &pattern);
-    }
-
-    #[test]
-    fn small_repeat_ignored() {
-        let words = vec!["aaa"];
-        let mut p = Pidgin::new();
-        p.add(&words);
-        let pattern = p.compile();
-        assert_eq!("aaa", &pattern.to_string());
-        all_equal(&words, &pattern);
-    }
-
-    #[test]
-    fn longer_repeat_found() {
-        let words = vec!["aaaa"];
-        let mut p = Pidgin::new();
-        p.add(&words);
-        let pattern = p.compile();
-        assert_eq!("a{4}", &pattern.to_string());
-        all_equal(&words, &pattern);
-    }
-
-    #[test]
-    fn complex_repeat() {
-        let words = vec!["aaaabbbbaaaabbbb"];
-        let mut p = Pidgin::new();
-        p.add(&words);
-        let pattern = p.compile();
-        assert_eq!("(?:a{4}b{4}){2}", &pattern.to_string());
-        all_equal(&words, &pattern);
-    }
-
-    #[test]
-    fn simple_string_symbol_capturing() {
-        let words = vec!["foo"];
-        let mut p = Pidgin::new();
-        p.rule("foo", &Pidgin::new().grammar(&["bar"]));
-        p.add(&words);
-        let pattern = p.compile();
-        assert_eq!("(?P<foo>bar)", pattern.to_string());
-    }
-
-    #[test]
-    fn string_string_symbol_ordering() {
-        let words = vec!["foo f"];
-        let mut p = Pidgin::new();
-        p.rule("foo", &Pidgin::new().grammar(&["bar"]));
-        p.rule("f", &Pidgin::new().grammar(&["plugh"]));
-        p.add(&words);
-        let pattern = p.compile();
-        assert_eq!("(?P<foo>bar) (?P<f>plugh)", pattern.to_string());
-    }
-
-    #[test]
-    fn string_regex_symbol_ordering() {
-        let words = vec!["foo f"];
-        let mut p = Pidgin::new();
-        p.foreign_rx_rule("foo", "bar", None).unwrap();
-        p.rule("f", &Pidgin::new().grammar(&["plugh"]));
-        p.add(&words);
-        let pattern = p.compile();
-        assert_eq!("(?P<f>plugh)oo (?P<f>plugh)", pattern.to_string());
-    }
-
-    #[test]
-    fn regex_regex_symbol_ordering() {
-        let words = vec!["foo f"];
-        let mut p = Pidgin::new();
-        p.foreign_rx_rule("foo", "bar", None).unwrap();
-        p.foreign_rx_rule("f", "plugh", None).unwrap();
-        p.add(&words);
-        let pattern = p.compile();
-        assert_eq!("(?:bar) (?:plugh)", pattern.to_string());
-    }
-
-    #[test]
-    fn normalize_whitespace() {
-        let words = vec!["foo bar", "baz   plugh"];
-        let mut p = Pidgin::new().normalize_whitespace(true);
-        p.add(&words);
-        let pattern = p.compile().to_string();
-        let rx = Regex::new(&pattern).unwrap();
-        assert!(rx.is_match("foo    bar"));
-        assert!(rx.is_match("baz plugh"));
-    }
-
-    #[test]
-    fn word_boundaries() {
-        let words = vec!["tardigrade", "onomatopoeia"];
-        let mut p = Pidgin::new().word_bound();
-        p.add(&words);
-        let pattern = p.compile().to_string();
-        let rx = Regex::new(&pattern).unwrap();
-        for w in words {
-            assert!(rx.is_match(w));
-            let s = String::from("a") + w;
-            assert!(!rx.is_match(&s));
-            let s = w.to_string() + "a";
-            assert!(!rx.is_match(&s));
-            let s = String::from(" ") + w;
-            assert!(rx.is_match(&s));
-            let s = w.to_string() + " ";
-            assert!(rx.is_match(&s));
-        }
-    }
-
-    #[test]
-    fn line_boundaries() {
-        let words = vec!["tardigrade", "onomatopoeia"];
-        let mut p = Pidgin::new().line_bound();
-        p.add(&words);
-        let pattern = p.compile().to_string();
-        let rx = Regex::new(&pattern).unwrap();
-        for w in words {
-            assert!(rx.is_match(w), format!("{} matches '{}", pattern, w));
-            let s = String::from(" ") + w;
-            assert!(
-                !rx.is_match(&s),
-                format!("{} doesn't match '{}' with space before", pattern, w)
-            );
-            let s = w.to_string() + " ";
-            assert!(
-                !rx.is_match(&s),
-                "{} doesn't match '{}' with space after",
-                pattern,
-                w
-            );
-            let s = String::from("\n") + w;
-            assert!(
-                rx.is_match(&s),
-                format!("{} matches '{}' with newline before", pattern, w)
-            );
-            let s = w.to_string() + "\n";
-            assert!(
-                rx.is_match(&s),
-                format!("{} matches '{}' with newline after", pattern, w)
-            );
-        }
-    }
-
-    #[test]
-    fn string_boundaries() {
-        let words = vec!["tardigrade", "onomatopoeia"];
-        let mut p = Pidgin::new().string_bound();
-        p.add(&words);
-        let pattern = p.compile().to_string();
-        let rx = Regex::new(&pattern).unwrap();
-        for w in words {
-            assert!(rx.is_match(w), format!("{} matches '{}", pattern, w));
-            let s = String::from(" ") + w;
-            assert!(
-                !rx.is_match(&s),
-                format!("{} doesn't match '{}' with space before", pattern, w)
-            );
-            let s = w.to_string() + " ";
-            assert!(
-                !rx.is_match(&s),
-                "{} doesn't match '{}' with space after",
-                pattern,
-                w
-            );
-            let s = String::from("\n") + w;
-            assert!(
-                !rx.is_match(&s),
-                format!("{} doesn't match '{}' with newline before", pattern, w)
-            );
-            let s = w.to_string() + "\n";
-            assert!(
-                !rx.is_match(&s),
-                format!("{} doesn't match '{}' with newline after", pattern, w)
-            );
-        }
-    }
-
-    #[test]
-    fn rule_ordering() {
-        let mut p = Pidgin::new();
-        p.foreign_rule("foo", "(?P<alpha>[a-zA-Z]+)").unwrap();
-        p.foreign_rule("foo", r"(?P<numeric>\d+)").unwrap();
-        p.foreign_rule("foo", r"(?P<alphanumeric>[\da-zA-Z]+)")
-            .unwrap();
-        p.add(&["foo"]);
-        let pattern = p.compile().to_string();
-        let rx = Regex::new(&pattern).unwrap();
-        let cap = rx.captures("1234").unwrap();
-        assert!(cap.name("foo").is_some(), format!("{} matched", rx));
-        assert!(cap.name("numeric").is_some(), "right order");
-        let cap = rx.captures("abc").unwrap();
-        assert!(cap.name("foo").is_some(), "pattern matched");
-        assert!(cap.name("alpha").is_some(), "right order");
-        p.clear();
-        p.foreign_rule("foo", r"(?P<alphanumeric>[\da-zA-Z]+)")
-            .unwrap();
-        p.foreign_rule("foo", "(?P<alpha>[a-zA-Z]+)").unwrap();
-        p.foreign_rule("foo", r"(?P<numeric>\d+)").unwrap();
-        p.add(&["foo"]);
-        let pattern = p.compile().to_string();
-        let rx = Regex::new(&pattern).unwrap();
-        let cap = rx.captures("1234").unwrap();
-        assert!(cap.name("foo").is_some(), "pattern matched");
-        assert!(cap.name("numeric").is_none(), "right order");
-        let cap = rx.captures("abc").unwrap();
-        assert!(cap.name("foo").is_some(), "pattern matched");
-        assert!(cap.name("alpha").is_none(), "right order");
-    }
-
-    #[test]
-    fn case_sensitivity() {
-        let words = vec!["cat", "dog"];
-        let mut p = Pidgin::new().case_insensitive(true);
-        p.add(&words);
-        let pattern = p.compile();
-        all_equal(&vec!["CAT", "DOG"], &pattern);
-    }
-
-    #[test]
-    fn nested_capturing() {
-        let mut p = Pidgin::new()
-            .word_bound()
-            .normalize_whitespace(true)
-            .case_insensitive(true);
-        let apples = p.add(&vec!["pippin", "northern spy", "crab"]).compile();
-        let oranges = p.add(&vec!["blood", "navel", "valencia"]).compile();
-        p.rule("apple", &apples);
-        p.rule("orange", &oranges);
-        let fruit = p.add(&vec!["apple", "orange"]).compile();
-        let lettuces = p.add(&vec!["red", "green", "boston", "romaine"]).compile();
-        let tomatoes = p
-            .add(&vec!["cherry", "brandywine", "beefsteak", "roma"])
-            .compile();
-        p.rule("lettuce", &lettuces);
-        p.rule("tomatoe", &tomatoes);
-        let vegetables = p.add(&vec!["lettuce", "tomatoe"]).compile();
-        p.rule("vegetable", &vegetables);
-        p.rule("fruit", &fruit);
-        let matcher = p
-            .add(&vec!["fruit", "vegetable"])
-            .compile()
-            .matcher()
-            .unwrap();
-        assert!(matcher.is_match("cherry"));
-        let captures = matcher.parse("cherry").unwrap();
-        assert_eq!(captures.name("vegetable").unwrap().as_str(), "cherry");
-        assert_eq!(captures.name("tomatoe").unwrap().as_str(), "cherry");
-        assert!(matcher.is_match("Brandywine"));
-        let captures = matcher.parse("  Northern  Spy  ").unwrap();
-        assert_eq!(captures.name("fruit").unwrap().as_str(), "Northern  Spy");
-        assert_eq!(captures.name("apple").unwrap().as_str(), "Northern  Spy");
-        assert!(!matcher.is_match("tomatoes"));
-    }
-
-    #[test]
-    fn reverse_greed() {
-        let mut p = Pidgin::new().reverse_greed(true);
-        let g = p.grammar(&vec!["bar"]);
-        assert_eq!("(?U:bar)", g.to_string());
-    }
-
-    #[test]
-    fn build_rule() {
-        let mut p = Pidgin::new().word_bound().normalize_whitespace(true);
-        let animal = p.grammar(&vec!["cat", "cow", "camel", "mongoose"]);
-        p.rule("animal", &animal);
-        let animal_space = p.add_str("animal ").compile();
-        p.build_rule(
-            "animal_proof",
-            vec![gf(animal_space.reps_min(1).unwrap()), sf("QED")],
-        );
-        let m = p.add_str("animal_proof").matcher().unwrap();
-        assert!(m.is_match("camel QED"));
-        assert!(m.is_match("camel  camel   cat cow mongoose    QED"));
-        assert!(!m.is_match("scamel QED"));
-    }
-
-    #[test]
-    fn min_reps_0() {
-        let mut p = Pidgin::new();
-        let g = p.grammar(&vec!["foo", "bar", "baz"]);
-        p.build_rule(
-            "foo",
-            vec![sf("xyzzy "), gf(g.reps_min(0).unwrap()), sf(" plugh")],
-        );
-        let g = p.grammar(&vec!["foo"]);
-        assert!(format!("{}", g).contains("*"));
-        let m = g.matcher().unwrap();
-        assert!(m.is_match("xyzzy  plugh"));
-        assert!(m.is_match("xyzzy foo plugh"));
-        assert!(m.is_match("xyzzy foobar plugh"));
-        assert!(m.is_match("xyzzy foobarbaz plugh"));
-    }
-
-    #[test]
-    fn min_reps_1() {
-        let mut p = Pidgin::new();
-        let g = p.grammar(&vec!["foo", "bar", "baz"]);
-        p.build_rule(
-            "foo",
-            vec![sf("xyzzy "), gf(g.reps_min(1).unwrap()), sf(" plugh")],
-        );
-        let g = p.grammar(&vec!["foo"]);
-        assert!(format!("{}", g).contains("+"));
-        let m = g.matcher().unwrap();
-        assert!(!m.is_match("xyzzy  plugh"));
-        assert!(m.is_match("xyzzy foo plugh"));
-        assert!(m.is_match("xyzzy foobar plugh"));
-        assert!(m.is_match("xyzzy foobarbaz plugh"));
-    }
-
-    #[test]
-    fn min_reps_2() {
-        let mut p = Pidgin::new();
-        let g = p.grammar(&vec!["foo", "bar", "baz"]);
-        p.build_rule(
-            "foo",
-            vec![sf("xyzzy "), gf(g.reps_min(2).unwrap()), sf(" plugh")],
-        );
-        let g = p.grammar(&vec!["foo"]);
-        assert!(format!("{}", g).contains("{2,}"));
-        let m = g.matcher().unwrap();
-        assert!(!m.is_match("xyzzy  plugh"));
-        assert!(!m.is_match("xyzzy foo plugh"));
-        assert!(m.is_match("xyzzy foobar plugh"));
-        assert!(m.is_match("xyzzy foobarbaz plugh"));
-    }
-
-    #[test]
-    fn max_reps_1() {
-        let mut p = Pidgin::new();
-        let g = p.grammar(&vec!["foo", "bar", "baz"]);
-        p.build_rule(
-            "foo",
-            vec![sf("xyzzy "), gf(g.reps_max(1).unwrap()), sf(" plugh")],
-        );
-        let g = p.grammar(&vec!["foo"]);
-        assert!(format!("{}", g).contains("?"));
-        let m = g.matcher().unwrap();
-        assert!(m.is_match("xyzzy  plugh"));
-        assert!(m.is_match("xyzzy foo plugh"));
-        assert!(!m.is_match("xyzzy foobar plugh"));
-        assert!(!m.is_match("xyzzy foobarbaz plugh"));
-    }
-
-    #[test]
-    fn max_reps_2() {
-        let mut p = Pidgin::new();
-        let g = p.grammar(&vec!["foo", "bar", "baz"]);
-        p.build_rule(
-            "foo",
-            vec![sf("xyzzy "), gf(g.reps_max(2).unwrap()), sf(" plugh")],
-        );
-        let g = p.grammar(&vec!["foo"]);
-        assert!(format!("{}", g).contains("{0,2}"));
-        let m = g.matcher().unwrap();
-        assert!(m.is_match("xyzzy  plugh"));
-        assert!(m.is_match("xyzzy foo plugh"));
-        assert!(m.is_match("xyzzy foobar plugh"));
-        assert!(!m.is_match("xyzzy foobarbaz plugh"));
-    }
-
-    #[test]
-    fn build_rule_bound() {
-        let mut p = Pidgin::new();
-        let g = p.grammar(&vec!["foo", "bar", "baz"]);
-        p = p.word_bound();
-        p.build_rule("foo", vec![sf("xyzzy"), gf(g), sf("plugh")]);
-        let g = p.grammar(&vec!["foo"]);
-        print!("{}", g);
-        let m = g.matcher().unwrap();
-        assert!(m.is_match("xyzzyfooplugh"));
-        assert!(!m.is_match("_xyzzyfooplugh"));
-        assert!(!m.is_match("xyzzyfooplugh_"));
-        assert!(!m.is_match("xyzzy foo plugh"));
-    }
-
-    #[test]
-    fn boundaries_only_on_leaves() {
-        let mut p = Pidgin::new().word_bound();
-        let words = vec!["foo", "@bar", "baz"];
-        let g = p.grammar(&words);
-        p.rule("foo", &g);
-        let m = p.grammar(&vec!["foo"]).matcher().unwrap();
-        for w in words {
-            assert!(m.is_match(w), w);
-            let right_bound = w.to_string() + "b";
-            assert!(!m.is_match(&right_bound), right_bound);
-        }
-        assert!(!m.is_match("bfoo"), "bfoo");
-        assert!(!m.is_match("bbaz"), "bbaz");
-        assert!(m.is_match("b@bar"), "b@bar");
-        assert!(!m.is_match("camel QEDs"));
-    }
-
-    #[test]
-    fn has_test() {
-        let mut p = Pidgin::new();
-        let g = p.grammar(&vec!["cat", "dog", "camel"]);
-        p.rule("animal", &g);
-        let g = p.grammar(&vec!["carpet", "crate", "cartoon"]);
-        p.rule("thing", &g);
-        let m = p.grammar(&vec!["animal", "thing"]).matcher().unwrap();
-        assert!(m.parse("cat").unwrap().has("animal"));
-    }
-
 }

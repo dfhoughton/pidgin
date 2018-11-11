@@ -1,8 +1,8 @@
 use crate::grammar::Grammar;
-use crate::pidgin::{Pidgin, RuleFragment};
+use crate::pidgin::Pidgin;
 use crate::util::Expression;
 
-/// Compiles a `pidgin::Grammar`. This is likely all that you want.
+/// Compiles a [`Grammar`].
 ///
 /// # Examples
 ///
@@ -88,6 +88,7 @@ use crate::util::Expression;
 ///   dog => [["dachshund", "malamute"]]
 /// };
 /// ```
+/// 
 /// ## Order
 ///
 /// The macro requires only that you provide a master rule and that the remaining
@@ -95,12 +96,14 @@ use crate::util::Expression;
 /// and that there is no recursion. Recursion will cause a panic.
 ///
 /// ## Conventions
+/// 
 /// ### Flags
 ///
 /// Flags take the form `(?<on>-<off>)` just as in regular expressions. They may
 /// appear before all the rules in the grammar as defaults and after the arrow
 /// of a particular rule, in which case they apply to that rule alone. Rules
 /// do not inherit the flags of rules they are contained in. In
+/// 
 /// ```rust
 /// #  #[macro_use] extern crate pidgin;
 /// grammar!{
@@ -108,27 +111,35 @@ use crate::util::Expression;
 ///   cat => ("cat")
 /// };
 /// ```
+/// 
 /// the `<cat>` rule is not case-insensitive.
 ///
 /// The flags understood are the standard regex flags minus `x` plus a few
 /// peculiar to grammars.
+/// 
 /// #### `b` and `B`
+/// 
 /// The `b` and `B` flags correspond to the `\b` regex anchor, the `b` flag being
 /// for the left word boundary anchor and the `B` flag for the right. They only
-/// have an effect on `("string literal")` and `[&str_vector]` elements of a
+/// have an effect on [`("literal")`](#literal) and [`[vec]`](#vec) elements of a
 /// rule, and only when these elements are on the left or right margin of their
 /// rule.
+/// 
 /// ```rust
 /// #  #[macro_use] extern crate pidgin;
 /// grammar!{
 ///   foo -> (?bB) ("cat") ("dog") ("donkey")
 /// };
+/// 
 /// ```
 /// will produce a regex equivalent to `\bcat\s*dog\s*donkey\b`.
+/// 
 /// #### `w` and `W`
+/// 
 /// The `w` and `W` flags, which are mutually incompatible, control the normalization
-/// of whitespace in `[vec]` elements. `w` means whitespace means "some whitespace"
+/// of whitespace in [`[vec]`](#vec) elements. `w` means "some whitespace"
 /// and `W` means "maybe some whitespace".
+/// 
 /// ```rust
 /// #  #[macro_use] extern crate pidgin;
 /// grammar!{
@@ -136,12 +147,14 @@ use crate::util::Expression;
 /// };
 /// ```
 /// is equivalent to `cat\s+a\s+log`.
+/// 
 /// ```rust
 /// #  #[macro_use] extern crate pidgin;
 /// grammar!{
 ///   foo => (?W) [["cat a log"]]
 /// };
 /// ```
+/// 
 /// is equivalent to `cat\s*a\s*log`.
 ///
 /// As in regular expressions, the order of flags, or repetition of flags, in
@@ -156,10 +169,10 @@ use crate::util::Expression;
 ///
 /// Rule names are separated from their definition by one of two arrows.
 ///
-/// #### `=>`
+/// #### fat arrow `=>`
 ///
 /// ```rust
-/// #  #[macro_use] extern crate pidgin;
+/// # #[macro_use] extern crate pidgin;
 /// grammar!{
 ///   foo => ("cat") ("dog") // equivalent to the regex catdog
 /// };
@@ -167,7 +180,7 @@ use crate::util::Expression;
 ///
 /// This is the usual separator.
 ///
-/// #### `->`
+/// #### skinny arrow `->`
 ///
 /// The skinny arrow separator indicates that the elements of the rule may
 /// optionally be separated by whitespace.
@@ -198,7 +211,7 @@ use crate::util::Expression;
 /// };
 /// ```
 ///
-/// If you combine the skinny arrow with word boundaries, the optional space
+/// If you combine the skinny arrow with [word boundaries](#b-and-b), the optional space
 /// may become obligatory.
 ///
 /// ```rust
@@ -214,7 +227,7 @@ use crate::util::Expression;
 ///
 /// ### Elements
 ///
-/// A rule definition, after the optional flags, consists of a sequence of
+/// A rule definition, after the optional [flags](#flags), consists of a sequence of
 /// rule elements.
 ///
 /// ```rust
@@ -242,7 +255,7 @@ use crate::util::Expression;
 /// The value of this string will not be further manipulated. Whitespace characters
 /// are preserved as is. This literal will be interpolated into the constructed
 /// regular expression with appropriate escaping, so, for instance, `.` will
-/// become `\.`. Flags such as `(?i)` may still apply.
+/// become `\.`. [Flags](#flags) such as `(?i)` may still apply.
 ///
 /// #### `r(regex)`
 ///
@@ -255,10 +268,10 @@ use crate::util::Expression;
 ///
 /// An element delimited by a pair of parentheses proceeded by an `r` provides a regular.
 /// expression literal. The parentheses again must contain an expression that can
-/// converted to a `String` via `to_string`. Unlike the `(literal)` expression,
+/// converted to a `String` via `to_string`. Unlike the [`(literal)`](#literal) expression,
 /// the characters in the `r(regex)` literal will not be escaped.
 ///
-/// Take care to avoid named captures in `r(regex)` elements, as Rust's `regex`
+/// Take care to avoid named captures in `r(regex)` elements, as Rust's [`regex`]
 /// does not allow the repetition of group names. Also, it is possible the name
 /// you choose will conflict with those inserted by the macro. These all consist
 /// of an `m` followed by an integer.
@@ -275,8 +288,7 @@ use crate::util::Expression;
 ///
 /// An element delimited by angle brackets refers to another rule.
 /// The parentheses again must contain an expression that can
-/// converted to a `String` via `to_string`. Unlike the `(literal)` expression,
-/// the characters in the `r(regex)` literal will not be escaped.
+/// converted to a `String` via `to_string`.
 ///
 /// #### `[vec]`
 ///
@@ -305,12 +317,12 @@ use crate::util::Expression;
 /// };
 /// ```
 ///
-/// The expression inside a `g(grammar)` element must be a `pidgin::Grammar`
-/// or a reference to the same. It will be converted into an owned `Grammar`
+/// The expression inside a `g(grammar)` element must be a [`Grammar`]
+/// or a reference to the same. It will be converted into an owned [`Grammar`]
 /// via `clone`.
 ///
 /// The `g(grammar)` element provides a means to reuse grammars in other grammars.
-/// Note that `pidgin::Grammar::rule` provides a mechanism to extract a useful
+/// Note that [`Grammar::rule`] provides a mechanism to extract a useful
 /// piece of one grammar for re-use in another.
 ///
 /// ```rust
@@ -353,8 +365,8 @@ use crate::util::Expression;
 ///
 /// ### Repetition
 ///
-/// All element types *except `r(regex)`* can be followed by a repetition suffix.
-/// These are identical to the repetition suffixes allowed by regexes.
+/// All element types *except [`r(regex)`](#rregex)* can be followed by a repetition suffix.
+/// These are identical to the [repetition] suffixes allowed by regexes.
 ///
 /// ```rust
 /// #  #[macro_use] extern crate pidgin;
@@ -405,7 +417,7 @@ use crate::util::Expression;
 ///
 /// There are two points that bear mentioning regarding recursion and grammars.
 ///
-/// 1. You cannot write a recursive grammar. There is no mechanism in `regex::Regex`
+/// 1. You cannot write a recursive grammar. There is no mechanism in [`regex`]
 /// which would allow it and the macro could not compile it.
 /// 2. The `grammar!` macro works by recursion, nibbling elements off the
 /// beginning of the grammar definition and then recursing until all token are
@@ -424,6 +436,11 @@ use crate::util::Expression;
 /// As with regexes, the definition of grammars is not something you want to do
 /// repeatedly at runtime. The best practice is to compile them once and then
 /// reuse them with the [`lazy_static`](https://crates.io/crates/lazy_static) macro.
+/// 
+/// [`Grammar`]: ../pidgin/struct.Grammar.html
+/// [`Grammar::rule`]: ../pidgin/struct.Grammar.html#method.rule
+/// [`regex`]: https://docs.rs/regex/
+/// [repetition]: https://docs.rs/regex/1.0.6/regex/#repetitions
 #[macro_export]
 macro_rules! grammar {
     // common state has been set, proceed to recursively nibbling away bits of the grammar
@@ -759,7 +776,7 @@ pub fn build_grammar(
                         if flags.add_space && i != 0 {
                             g = left_pad(g);
                         }
-                        RuleFragment::G(g)
+                        g
                     }
                     Part::V(v, low, high, stingy) => {
                         let mut g = pidgin
@@ -778,7 +795,7 @@ pub fn build_grammar(
                         if *stingy {
                             g = g.stingy(true);
                         }
-                        RuleFragment::G(g)
+                        g
                     }
                     Part::G(g, low, high, stingy) => {
                         let mut g = compiled.get(g).unwrap().clone();
@@ -794,7 +811,7 @@ pub fn build_grammar(
                         if *stingy {
                             g = g.stingy(true);
                         }
-                        RuleFragment::G(g)
+                        g
                     }
                     Part::F(g, low, high, stingy) => {
                         let mut g = g.clone();
@@ -810,36 +827,31 @@ pub fn build_grammar(
                         if *stingy {
                             g = g.stingy(true);
                         }
-                        RuleFragment::G(g)
+                        g
                     }
                     Part::S(s, low, high, stingy) => {
-                        if !(flags.add_space && i != 0 || low.is_some() || high.is_some()) {
-                            RuleFragment::S(s.clone())
-                        } else {
-                            let mut g = pidgin.clone().add(&vec![s.as_str()]).compile_bounded(
-                                i == 0,
-                                i == last_index,
-                                false,
-                            );
-                            if flags.add_space && (i != 0 || low.is_some() || high.is_some()) {
-                                g = left_pad(g);
-                            }
-                            if low.is_some() {
-                                g = g.reps_min(low.unwrap()).unwrap();
-                            }
-                            if high.is_some() {
-                                g = g.reps_max(high.unwrap()).unwrap();
-                            }
-                            if *stingy {
-                                g = g.stingy(true);
-                            }
-                            RuleFragment::G(g)
+                        let mut g = pidgin.clone().add(&vec![s.as_str()]).compile_bounded(
+                            i == 0,
+                            i == last_index,
+                            false,
+                        );
+                        if flags.add_space && (i != 0 || low.is_some() || high.is_some()) {
+                            g = left_pad(g);
                         }
+                        if low.is_some() {
+                            g = g.reps_min(low.unwrap()).unwrap();
+                        }
+                        if high.is_some() {
+                            g = g.reps_max(high.unwrap()).unwrap();
+                        }
+                        if *stingy {
+                            g = g.stingy(true);
+                        }
+                        g
                     }
                 })
-                .collect::<Vec<RuleFragment>>();
-            pidgin.build_rule(rule, fragments);
-            grammars.push(pidgin.add_str(rule).compile());
+                .collect::<Vec<Grammar>>();
+            grammars.push(pidgin.build_grammar(rule, fragments));
         }
         let g = if grammars.len() == 1 {
             grammars.pop().unwrap()
