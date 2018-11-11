@@ -772,3 +772,52 @@ fn has_test() {
     let m = g.matcher().unwrap();
     assert!(m.parse("cat").unwrap().has("animal"));
 }
+
+#[test]
+fn children() {
+	let m = grammar!{
+	 	TOP -> <foo> <bar> <baz>
+	 	foo => (1)
+	 	bar => (2)
+	 	baz => (3)
+	}.matcher().unwrap().parse(" 1  2  3 ").unwrap();
+	if let Some(children) = m.children() {
+		assert_eq!(3, children.len());
+		assert_eq!("1", children[0].as_str());
+		assert_eq!("foo", children[0].rule());
+		assert_eq!("2", children[1].as_str());
+		assert_eq!("bar", children[1].rule());
+		assert_eq!("3", children[2].as_str());
+		assert_eq!("baz", children[2].rule());
+	} else {
+		assert!(false);
+	}
+}
+
+#[test]
+fn deep_name() {
+	let matcher = grammar!{
+		TOP -> <foo> <bar>
+		foo -> (1) <baz>
+		bar -> (2) <baz>
+		baz -> [["prawn", "shrimp", "crevette"]]
+	}.matcher().unwrap();
+	let p = matcher.parse("1 crevette 2 shrimp").unwrap();
+	assert!(p.name("baz").is_some());
+	assert_eq!("crevette", p.name("baz").unwrap().as_str());
+}
+
+
+#[test]
+fn deep_all_names() {
+	let matcher = grammar!{
+		TOP -> <foo> <bar>
+		foo -> (1) <baz>
+		bar -> (2) <baz>
+		baz -> [["prawn", "shrimp", "crevette"]]
+	}.matcher().unwrap();
+	let p = matcher.parse("1 crevette 2 shrimp").unwrap();
+	let names  = p.all_names("baz");
+	assert_eq!("crevette", names[0].as_str());
+	assert_eq!("shrimp", names[1].as_str());
+}

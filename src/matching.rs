@@ -313,6 +313,31 @@ impl<'t> Match<'t> {
         &self.rule
     }
     /// Returns the sub-matches of this match, if any.
+	///
+	/// # Examples
+	///  
+	/// ```rust
+    /// # #[macro_use] extern crate pidgin;
+    /// # use std::error::Error;
+    /// # fn demo() -> Result<(), Box<Error>> {
+	/// let m = grammar!{
+	/// 	TOP -> <foo> <bar> <baz>
+	/// 	foo => (1)
+	/// 	bar => (2)
+	/// 	baz => (3)
+	/// }.matcher()?.parse(" 1  2  3 ").unwrap();
+	/// 
+	/// let children = m.children().unwrap();
+	/// 
+	/// assert_eq!(3, children.len());
+	/// assert_eq!("1", children[0].as_str());
+	/// assert_eq!("foo", children[0].rule());
+	/// assert_eq!("2", children[1].as_str());
+	/// assert_eq!("bar", children[1].rule());
+	/// assert_eq!("3", children[2].as_str());
+	/// assert_eq!("baz", children[2].rule());
+	/// # Ok(()) }
+	/// ```
     pub fn children(&self) -> Option<&[Match<'t>]> {
         match self.children.as_ref() {
             Some(v) => Some(v),
@@ -321,6 +346,25 @@ impl<'t> Match<'t> {
     }
     /// Returns the first `Match` defined by the given rule under this parse
     /// node searching recursively, depth-first, left-to-right.
+	///
+	/// # Examples
+	///  
+	/// ```rust
+    /// # #[macro_use] extern crate pidgin;
+    /// # use std::error::Error;
+    /// # fn demo() -> Result<(), Box<Error>> {
+    /// let matcher = grammar!{
+    /// 	TOP -> <foo> <bar>
+    /// 	foo -> (1) <baz>
+    /// 	bar -> (2) <baz>
+    /// 	baz -> [["prawn", "shrimp", "crevette"]]
+    /// }.matcher()?;
+    /// let p = matcher.parse("1 crevette 2 shrimp").unwrap();
+	/// let baz = p.name("baz").unwrap();
+	/// 
+    /// assert_eq!("crevette", baz.as_str());
+	/// # Ok(()) }
+	/// ```
     pub fn name(&self, name: &str) -> Option<&Match> {
         if self.rule == name {
             Some(self)
@@ -338,6 +382,26 @@ impl<'t> Match<'t> {
     /// Returns all `Match`es matching the given rule in the parse tree under
     /// this node. Matches are ordered as found by a depth-first left-to-right
     /// search of the parse tree.
+	///
+	/// # Examples
+	///  
+	/// ```rust
+    /// # #[macro_use] extern crate pidgin;
+    /// # use std::error::Error;
+    /// # fn demo() -> Result<(), Box<Error>> {
+    /// let matcher = grammar!{
+    /// 	TOP -> <foo> <bar>
+    /// 	foo -> (1) <baz>
+    /// 	bar -> (2) <baz>
+    /// 	baz -> [["prawn", "shrimp", "crevette"]]
+    /// }.matcher()?;
+    /// let p = matcher.parse("1 crevette 2 shrimp").unwrap();
+	/// let names = p.all_names("baz");
+	/// 
+    /// assert_eq!("crevette", names[0].as_str());
+    /// assert_eq!("shrimp", names[1].as_str());
+	/// # Ok(()) }
+	/// ```
     pub fn all_names(&self, name: &str) -> Vec<&Match> {
         let mut v = Vec::new();
         self.collect(name, &mut v);
@@ -357,6 +421,7 @@ impl<'t> Match<'t> {
     ///     thing  => [["carpet", "crate", "cartoon"]]
     /// };
     /// let m = g.matcher()?;
+	/// 
     /// assert!(m.parse("cat").unwrap().has("animal"));
     /// # Ok(())}
     /// ```
