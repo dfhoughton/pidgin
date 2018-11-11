@@ -6,10 +6,12 @@ use std::collections::{BTreeSet, VecDeque};
 use std::fmt;
 
 /// A compiled collection of rules ready for the building of a
-/// `pidgin::Matcher` or for use in the definition of a new rule.
+/// [`Matcher`] or for use in the definition of a new rule.
 ///
-/// You do not build new `Grammar`s directly. Rather, the `compile` or `grammar`
-/// method of a `Pidgin` produces them for you.
+/// You do not build new `Grammar`s directly. Rather, the [`grammar!`] macro compiles them for you.
+/// 
+/// [`Matcher`]:  ../pidgin/struct.Matcher.html
+/// [`grammar!`]: ../pidgin/macro.grammar.html
 
 #[derive(Clone, Debug)]
 pub struct Grammar {
@@ -23,97 +25,45 @@ pub struct Grammar {
 }
 
 impl Grammar {
-    /// Assigns a name to the grammar.
-    ///
-    /// This will have no effect on any uses of the grammar already in
-    /// rules.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use pidgin::Pidgin;
-    /// let mut p = Pidgin::new();
-    /// let g = p.grammar(&vec!["foo", "bar", "baz"]);
-    /// p.rule("foo", &g);
-    /// let mut g = p.grammar(&vec!["foo cat", "foo dog"]);
-    /// print!("{}", g);
-    /// // TOP := {foo} (?:cat|dog)
-    /// // foo := foo|ba[rz]
-    /// g.name("Bartholemew");
-    /// print!("{}", g);
-    /// // Bartholemew := {foo} (?:cat|dog)
-    /// //         foo := foo|ba[rz]
-    /// ```
-    pub fn name(&mut self, name: &str) {
+	pub(crate) fn rx_rule(rx: String) -> Grammar {
+		Grammar{
+			name: None,
+			flags: Flags::defaults(),
+			stingy: false,
+			lower_limit: None,
+			upper_limit: None,
+			sequence: vec![Expression::Part(rx, false)],
+		}
+	}
+    pub(crate) fn name(&mut self, name: &str) {
         self.name = Some(name.to_string());
     }
     /// Compiles a `Matcher` based on the `Grammar`'s rules.
     ///
+	/// # Examples
+	/// 
+	/// ```rust
+    /// # #[macro_use] extern crate pidgin;
+    /// # use std::error::Error;
+    /// # fn demo() -> Result<(), Box<Error>> {
+	/// let m = grammar!{
+	/// 	(?wbB)
+	/// 	noun   => <person> | <place> | <thing>
+	/// 	person => [["Moe", "Larry", "Curly", "Sade", "Diana Ross"]]
+	/// 	place  => [["Brattleboro, Vermont"]]
+	/// 	thing  => [["tiddly wink", "muffin", "kazoo"]]
+	/// }.matcher()?;
+	/// # Ok(()) }
+	/// ```
+	/// 
     /// # Errors
     ///
-    /// If the `Grammar` contains a "foreign rule" with a named capture, an
-    /// error may be returned.
+    /// If the `Grammar` contains an ill-formed `r(rx)` or one with a named capture
+	/// which is repeated, an error will be returned.
     pub fn matcher(&self) -> Result<Matcher, Error> {
         Matcher::new(&self)
     }
-    /// Sets the required number of repetitions of the grammar in the string
-    /// matched against to exactly `r`.
-    ///
-    /// This is chiefly useful in conjunction with `Pidgin::build_rule`.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use pidgin::{Pidgin, sf, gf};
-    /// # use std::error::Error;
-    /// # fn dem() -> Result<(),Box<Error>> {
-    /// let mut p = Pidgin::new();
-    /// let g = p.grammar(&vec!["foo", "bar", "baz"]);
-    /// p.build_rule("foo", vec![sf("xyzzy "), gf(g.reps(3)), sf(" plugh")]);
-    /// let g = p.grammar(&vec!["foo"]);
-    /// let m = g.matcher()?;
-    /// assert!(m.is_match("xyzzy foobarbaz plugh"));
-    /// assert!(!m.is_match("xyzzy foo plugh"));
-    /// assert!(!m.is_match("xyzzy foobarbazfoo plugh"));
-    /// # Ok(()) }
-    /// ```
-    pub fn reps(&self, r: usize) -> Grammar {
-        let mut g = self.clone();
-        g.lower_limit = Some(r);
-        g.upper_limit = Some(r);
-        g
-    }
-    /// Sets the minimum required number of repetitions of the grammar in the string
-    /// matched against to `r`. If no maximum is set, this will be equivalent
-    /// to the regex repetition suffix `{r,}` -- there will be no upper limit.
-    ///
-    /// If you set the lower limit to 0 and set no upper limit, this will be
-    /// equivalent to the regex repetition suffix `*`. Likewise, 1 and no upper
-    /// limit will be equivalent to `+`.
-    ///
-    /// This is chiefly useful in conjunction with `Pidgin::build_rule`.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use pidgin::{Pidgin, sf, gf};
-    /// # use std::error::Error;
-    /// # fn dem() -> Result<(),Box<Error>> {
-    /// let mut p = Pidgin::new();
-    /// let g = p.grammar(&vec!["foo", "bar", "baz"]);
-    /// p.build_rule("foo", vec![sf("xyzzy "), gf(g.reps_min(3)?), sf(" plugh")]);
-    /// let m = p.matcher()?;
-    /// assert!(m.is_match("xyzzy foobarbaz plugh"));
-    /// assert!(m.is_match("xyzzy foobarbazfoo plugh"));
-    /// assert!(!m.is_match("xyzzy foobar plugh"));
-    /// # Ok(()) }
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// If an upper limit has been set and it is lower than the minimum, an
-    /// error will be returned
-    pub fn reps_min(&self, r: usize) -> Result<Grammar, String> {
+    pub(crate) fn reps_min(&self, r: usize) -> Result<Grammar, String> {
         if self.upper_limit.is_none() || self.lower_limit.unwrap() >= r {
             let mut flags = self.flags.clone();
             flags.enclosed = true;
@@ -133,34 +83,7 @@ impl Grammar {
             ))
         }
     }
-    /// Sets the maximum number of repetitions of the grammar in the string
-    /// matched against to `r`. If no minimum is set, this will be equivalent
-    /// to the regex repetition suffix `{0,r}` -- there will be no lower limit.
-    ///
-    /// This is chiefly useful in conjunction with `Pidgin::build_rule`.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use pidgin::{Pidgin, sf, gf};
-    /// # use std::error::Error;
-    /// # fn dem() -> Result<(),Box<Error>> {
-    /// let mut p = Pidgin::new();
-    /// let g = p.grammar(&vec!["foo", "bar", "baz"]);
-    /// p.build_rule("foo", vec![sf("xyzzy "), gf(g.reps_max(3)?), sf(" plugh")]);
-    /// let m = p.matcher()?;
-    /// assert!(m.is_match("xyzzy foobarbaz plugh"));
-    /// assert!(m.is_match("xyzzy foobar plugh"));
-    /// assert!(!m.is_match("xyzzy foobarbazfoo plugh"));
-    /// # Ok(()) }
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// If an lower limit has been set and it is higher than the maximum, an
-    /// error will be returned. Also, if the maximum is set to 0 an error will
-    /// be returned.
-    pub fn reps_max(&self, r: usize) -> Result<Grammar, String> {
+    pub(crate) fn reps_max(&self, r: usize) -> Result<Grammar, String> {
         if self.lower_limit.is_none() || self.lower_limit.unwrap() <= r {
             if r == 0 {
                 Err(String::from(
@@ -186,81 +109,9 @@ impl Grammar {
             ))
         }
     }
-    /// Sets whether the *grammar's* repetition suffix, if any, has the `?`
-    /// modifier. This has no effect on repetition suffixes created during the
-    /// ingestion of phrases.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use pidgin::{Pidgin, sf, gf};
-    /// # use std::error::Error;
-    /// # fn dem() -> Result<(),Box<Error>> {
-    /// let mut p = Pidgin::new();
-    /// let g = p.grammar(&vec!["foo"]);
-    /// p.build_rule("foo", vec![gf(g.reps_min(1)?.stingy(true))]);
-    /// let g = p.add_str("foo").compile();
-    /// let m = g.matcher()?;
-    /// let t = m.parse("foofoo").unwrap();
-    /// assert_eq!(t.as_str(), "foo");
-    /// # Ok(()) }
-    /// ```
-    pub fn stingy(mut self, stingy: bool) -> Grammar {
+    pub(crate) fn stingy(mut self, stingy: bool) -> Grammar {
         self.stingy = stingy;
         self
-    }
-    /// Sets the minimum number of repetitions of the grammar in the string
-    /// matched against to `min` and the maximum to `max`. If no minimum is set,
-    /// this will be equivalent to the regex repetition suffix `{min,max}`.
-    ///
-    /// This is chiefly useful in conjunction with `Pidgin::build_rule`.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use pidgin::{Pidgin, sf, gf};
-    /// # use std::error::Error;
-    /// # fn dem() -> Result<(),Box<Error>> {
-    /// let mut p = Pidgin::new();
-    /// let g = p.grammar(&vec!["foo", "bar", "baz"]);
-    /// p.build_rule("foo", vec![sf("xyzzy "), gf(g.reps_min_max(1, 3)?), sf(" plugh")]);
-    /// let m = p.matcher()?;
-    /// assert!(m.is_match("xyzzy foo plugh"));
-    /// assert!(m.is_match("xyzzy foobar plugh"));
-    /// assert!(m.is_match("xyzzy foobarbaz plugh"));
-    /// assert!(!m.is_match("xyzzy  plugh"));
-    /// assert!(!m.is_match("xyzzy foobarbazfoo plugh"));
-    /// # Ok(()) }
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// If the minimum is greater than the maximum or the maximum is 0, an errors
-    /// will be returned.
-    pub fn reps_min_max(&self, min: usize, max: usize) -> Result<Grammar, String> {
-        if min <= max {
-            if max == 0 {
-                Err(String::from(
-                    "the maximum number of repetitions must be greater than 0",
-                ))
-            } else {
-                let mut flags = self.flags.clone();
-                flags.enclosed = true;
-                Ok(Grammar {
-                    flags,
-                    name: self.name.clone(),
-                    sequence: self.sequence.clone(),
-                    lower_limit: Some(min),
-                    upper_limit: Some(max),
-                    stingy: self.stingy,
-                })
-            }
-        } else {
-            Err(format!(
-                "minimum repetitions {} is greater than maximum repetitions {}",
-                min, max
-            ))
-        }
     }
     pub(crate) fn any_suffix(&self) -> bool {
         (self.lower_limit.is_some() || self.upper_limit.is_some()) && !(self.lower_limit.is_some()
@@ -348,9 +199,9 @@ impl Grammar {
     /// #[macro_use] extern crate pidgin;
     /// let library = grammar!{
     ///     books => <cat> | <dog> | <camel>
-    ///     cat   => [&vec!["persian", "siamese", "calico", "tabby"]]
-    ///     dog   => [&vec!["dachshund", "chihuahua", "corgi", "malamute"]]
-    ///     camel => [&vec!["bactrian", "dromedary"]]
+    ///     cat   => [["persian", "siamese", "calico", "tabby"]]
+    ///     dog   => [["dachshund", "chihuahua", "corgi", "malamute"]]
+    ///     camel => [["bactrian", "dromedary"]]
     /// };
     /// let g = grammar!{
     ///     seen -> ("I saw a") g(library.rule("cat").unwrap()) (".")
@@ -390,103 +241,6 @@ impl Grammar {
         }
         None
     }
-    /// Produces a quasi-BNF representation of the grammar.
-    ///
-    /// This is how `pidging::Grammar` implements `std::fmt::Display`, so a
-    /// grammar's description is what you get if you feed it to the `{}` pattern.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use pidgin::Pidgin;
-    /// let mut p = Pidgin::new();
-    /// let g = p.grammar(&vec!["bar", "baz"]);
-    /// p.rule("foo", &g);
-    /// p = p.case_insensitive(true);
-    /// let g = p.grammar(&vec!["ping", "pang", "pong"]);
-    /// p = p.case_insensitive(false);
-    /// p.rule("xyzzy", &g);
-    /// let g = p.grammar(&vec!["xyzzy", "qux"]);
-    /// p.rule("plugh", &g);
-    /// let g = p.grammar(&vec!["foo", "plugh"]);
-    /// println!("{}", g.describe());
-    /// //   TOP :=      {foo}|{plugh}
-    /// //   foo :=      ba[rz]
-    /// // plugh :=      qux|{xyzzy}
-    /// // xyzzy := (?i) p[aio]ng
-    /// println!("{}", g);
-    /// //   TOP :=      {foo}|{plugh}
-    /// //   foo :=      ba[rz]
-    /// // plugh :=      qux|{xyzzy}
-    /// // xyzzy := (?i) p[aio]ng
-    /// ```
-    pub fn describe(&self) -> String {
-        let g = self.describable_grammar();
-        let mut flags = g.flags(&Flags::defaults());
-        if flags.len() > 0 {
-            flags = format!("(?{})", flags);
-        }
-        let mut rules = vec![(
-            self.name
-                .as_ref()
-                .unwrap_or(&String::from("TOP"))
-                .to_string(),
-            flags,
-            g._describe(),
-        )];
-        let mut seen: BTreeSet<String> = BTreeSet::new();
-        let mut queue = VecDeque::new();
-        for r in self.rules() {
-            let og = g.find(&r).unwrap().describable_grammar();
-            queue.push_back((r, og));
-        }
-        loop {
-            if let Some((r, g)) = queue.pop_front() {
-                if !seen.contains(&r) {
-                    let mut flags = g.flags(&Flags::defaults());
-                    if flags.len() > 0 {
-                        flags = format!("(?{})", flags);
-                    }
-                    rules.push((r.clone(), flags, g._describe()));
-                    seen.insert(r);
-                    for r in g.rules() {
-                        let og = g.find(&r).unwrap().describable_grammar();
-                        queue.push_back((r, og));
-                    }
-                }
-            } else {
-                break;
-            }
-        }
-        let mut max = 3;
-        let mut flag_max = 0;
-        for (ref n, flags, _) in &rules {
-            let l = n.len();
-            if l > max {
-                max = l;
-            }
-            let l = flags.len();
-            if l > flag_max {
-                flag_max = l;
-            }
-        }
-        if flag_max > 0 {
-            flag_max += 1;
-        }
-        let mut s = String::new();
-        for (n, f, d) in rules {
-            s =
-                s + &format!(
-                    "{: >width$} := {: <flag_width$}{}",
-                    n,
-                    f,
-                    d,
-                    width = max,
-                    flag_width = flag_max
-                ) + "\n";
-        }
-        s
-    }
     /// Generates a non-capturing regex matching what the grammar matches.
     ///
     /// # Examples
@@ -497,7 +251,7 @@ impl Grammar {
     /// # fn dem() -> Result<(),Box<Error>> {
     /// let g = grammar!{
     ///     foo -> r(r"\A") <bar> r(r"\z")
-    ///     bar => (?i) [&vec!["cat", "camel", "corn"]]
+    ///     bar => (?i) [["cat", "camel", "corn"]]
     /// };
     /// let rx = g.rx()?.to_string();
     /// assert_eq!(r"\A(?i:\s*c(?:orn|a(?:t|mel)))\s*\z", rx);
@@ -587,7 +341,22 @@ impl Grammar {
     /// mostly for debugging. Rules will be identifiable by named groups, but
     /// group names may repeat, in which case the stringification cannot be
     /// compiled into a regular expression.
-    pub fn to_string(&self) -> String {
+	/// 
+	/// # Examples
+	/// 
+    /// ```rust
+    /// # #[macro_use] extern crate pidgin;
+    /// # use std::error::Error;
+    /// # fn dem() -> Result<(),Box<Error>> {
+    /// let g = grammar!{
+    ///     foo -> <bar> <baz> | <baz> <bar>
+    ///     bar => ("baz")
+	///     baz => ("bar")
+    /// };
+    /// println!("{}", g.to_string());
+    /// # Ok(()) }
+    /// ```
+    pub(crate) fn to_string(&self) -> String {
         self.to_s(&Flags::defaults(), false, false)
     }
     pub(crate) fn clear_recursive(&self) -> Grammar {
@@ -743,6 +512,6 @@ impl Eq for Grammar {}
 
 impl fmt::Display for Grammar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.describe())
+        write!(f, "{}", self.rx().unwrap())
     }
 }

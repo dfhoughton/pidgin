@@ -23,6 +23,38 @@ impl Matcher {
     /// Returns `Some(Match)` if the grammar can parse the string. Note that
     /// unless the grammar is string-bounded, this only means it can parse
     /// the string at some point.
+	/// 
+	/// # Examples
+	/// 
+	/// ```rust
+    /// # #[macro_use] extern crate pidgin;
+    /// # use std::error::Error;
+    /// # fn demo() -> Result<(), Box<Error>> {
+	/// let m = grammar!{
+	/// 
+	/// 	(?bB)
+	/// 
+	/// 	S -> r(r"\A") <subject> <VP> r(r"\.\z")
+	/// 
+	/// 	subject           => [["Amy", "Bob", "Carter", "Dianne"]]
+	/// 	VP                -> <verb_intransitive> | <verb_transitive> <object>
+	/// 	verb_intransitive => [["naps", "doodles", "exercises", "meditates"]]
+	/// 	verb_transitive   => [["eats", "programs", "sees", "throws"]]
+	/// 	object            => (?w) [["a sandwich", "eggs", "the sunset"]]
+	/// 
+	/// }.matcher()?;
+	/// 
+	/// let parse_tree = m.parse("Amy programs the sunset.").unwrap();
+	/// 
+	/// println!("{}", parse_tree);
+	/// 
+	/// // S (0, 24): "Amy programs the sunset."
+	/// //   subject (0, 3): "Amy"
+	/// //   VP (4, 23): "programs the sunset"
+	/// //     verb_transitive (4, 12): "programs"
+	/// //     object (13, 23): "the sunset"
+	/// # Ok(()) }
+	/// ```
     pub fn parse<'t>(&self, s: &'t str) -> Option<Match<'t>> {
         match self.rx.captures(s) {
             Some(captures) => {
@@ -72,6 +104,30 @@ impl Matcher {
     }
     /// Returns whether the grammar can parse the string. This is a cheaper
     /// operation than parsing.
+	/// 
+	/// # Examples
+	/// 
+	/// ```rust
+    /// # #[macro_use] extern crate pidgin;
+    /// # use std::error::Error;
+    /// # fn demo() -> Result<(), Box<Error>> {
+	/// let m = grammar!{
+	/// 
+	/// 	(?bB)
+	/// 
+	/// 	S -> r(r"\A") <subject> <VP> r(r"\.\z")
+	/// 
+	/// 	subject           => [["Amy", "Bob", "Carter", "Dianne"]]
+	/// 	VP                -> <verb_intransitive> | <verb_transitive> <object>
+	/// 	verb_intransitive => [["naps", "doodles", "exercises", "meditates"]]
+	/// 	verb_transitive   => [["eats", "programs", "sees", "throws"]]
+	/// 	object            => (?w) [["a sandwich", "eggs", "the sunset"]]
+	/// 
+	/// }.matcher()?;
+	/// 
+	/// assert!(m.is_match("Bob doodles."));
+	/// # Ok(()) }
+	/// ```
     pub fn is_match(&self, text: &str) -> bool {
         self.rx.is_match(text)
     }
@@ -231,14 +287,15 @@ impl<'t> Match<'t> {
     /// # Examples
     ///
     /// ```rust
-    /// # use pidgin::Pidgin; use std::error::Error;
+    /// # #[macro_use] extern crate pidgin;
+    /// # use std::error::Error;
     /// # fn demo() -> Result<(), Box<Error>> {
-    /// let mut p = Pidgin::new();
-    /// let g = p.grammar(&vec!["cat", "dog", "camel"]);
-    /// p.rule("animal", &g);
-    /// let g = p.grammar(&vec!["carpet", "crate", "cartoon"]);
-    /// p.rule("thing", &g);
-    /// let m = p.grammar(&vec!["animal", "thing"]).matcher()?;
+    /// let g = grammar!{
+    ///     TOP => <animal> | <thing>
+    ///     animal => [["cat", "dog", "camel"]]
+    ///     thing  => [["carpet", "crate", "cartoon"]]
+    /// };
+    /// let m = g.matcher()?;
     /// assert!(m.parse("cat").unwrap().has("animal"));
     /// # Ok(())}
     /// ```

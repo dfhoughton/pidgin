@@ -90,20 +90,6 @@ use crate::util::Expression;
 /// ```
 /// ## Order
 ///
-/// The programmatic API requires that you define grammars from specific to
-/// general -- define cats and dogs before you define an animal as either a cat
-/// or a dog.
-///
-/// ```rust
-/// # use pidgin::Pidgin;
-/// let mut p = Pidgin::new();
-/// let cats = p.grammar(&vec!["calico", "tabby"]);
-/// let dogs = p.grammar(&vec!["dachshund", "malamute"]);
-/// p.rule("cat", &cats);
-/// p.rule("dog", &dogs);
-/// let animal = p.grammar(&vec!["cat", "dog"]);
-/// ```
-///
 /// The macro requires only that you provide a master rule and that the remaining
 /// rules all be sortable such that every rule that is referenced is defined
 /// and that there is no recursion. Recursion will cause a panic.
@@ -769,10 +755,7 @@ pub fn build_grammar(
                 .enumerate()
                 .map(|(i, p)| match p {
                     Part::R(s) => {
-                        let mut p = Pidgin::new();
-                        p.foreign_rule("_", &s).expect(&format!("bad rx: {}", &s));
-                        let mut g = p.add_str("_").compile();
-                        g.clear_name();
+						let mut g = Grammar::rx_rule(s.to_string());
                         if flags.add_space && i != 0 {
                             g = left_pad(g);
                         }
@@ -974,7 +957,7 @@ impl MacroFlags {
         }
     }
     // make the pidgin suit the flags
-    pub fn adjust(&self, mut p: Pidgin) -> Pidgin {
+    pub(crate) fn adjust(&self, mut p: Pidgin) -> Pidgin {
         if self.case_insensitive.is_some() {
             p = p.case_insensitive(self.case_insensitive.unwrap());
         }
