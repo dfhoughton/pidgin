@@ -272,25 +272,6 @@ impl Grammar {
             .collect::<Vec<_>>()
             .join("")
     }
-    /// Returns a quasi-regex representation of the grammar. This is intended
-    /// mostly for debugging. Rules will be identifiable by named groups, but
-    /// group names may repeat, in which case the stringification cannot be
-    /// compiled into a regular expression.
-	/// 
-	/// # Examples
-	/// 
-    /// ```rust
-    /// # #[macro_use] extern crate pidgin;
-    /// # use std::error::Error;
-    /// # fn dem() -> Result<(),Box<Error>> {
-    /// let g = grammar!{
-    ///     foo -> <bar> <baz> | <baz> <bar>
-    ///     bar => ("baz")
-	///     baz => ("bar")
-    /// };
-    /// println!("{}", g.to_string());
-    /// # Ok(()) }
-    /// ```
     pub(crate) fn to_string(&self) -> String {
         self.to_s(&Flags::defaults(), false, false)
     }
@@ -447,6 +428,6 @@ impl Eq for Grammar {}
 
 impl fmt::Display for Grammar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.rx().unwrap())
+        write!(f, "{}", self.to_string())
     }
 }
