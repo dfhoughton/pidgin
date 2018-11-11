@@ -1,6 +1,6 @@
 [package]
 name = "pidgin"
-version = "1.0.0"
+version = "0.2.0"
 authors = ["dfhoughton <dfhoughton@gmail.com>"]
 description= "simple non-recursive grammars"
 homepage = "https://github.com/dfhoughton/pidgin"
