@@ -759,7 +759,7 @@ fn complex_repeat() {
 	for w in words {
 		assert!(m.is_match(w));
 	}
-    assert_eq!("(?:a{4}b{4}){2}", &g.to_string());
+    assert_eq!("(?:a{4}b{4}){2}", &g.rx().unwrap().to_string());
 }
 
 #[test]

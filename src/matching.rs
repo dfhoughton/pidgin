@@ -359,6 +359,7 @@ impl<'t> Match<'t> {
     /// 	bar -> (2) <baz>
     /// 	baz -> [["prawn", "shrimp", "crevette"]]
     /// }.matcher()?;
+	/// 
     /// let p = matcher.parse("1 crevette 2 shrimp").unwrap();
 	/// let baz = p.name("baz").unwrap();
 	/// 
@@ -395,6 +396,7 @@ impl<'t> Match<'t> {
     /// 	bar -> (2) <baz>
     /// 	baz -> [["prawn", "shrimp", "crevette"]]
     /// }.matcher()?;
+	/// 
     /// let p = matcher.parse("1 crevette 2 shrimp").unwrap();
 	/// let names = p.all_names("baz");
 	/// 
@@ -420,6 +422,7 @@ impl<'t> Match<'t> {
     ///     animal => [["cat", "dog", "camel"]]
     ///     thing  => [["carpet", "crate", "cartoon"]]
     /// };
+	/// 
     /// let m = g.matcher()?;
 	/// 
     /// assert!(m.parse("cat").unwrap().has("animal"));
