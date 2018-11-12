@@ -140,7 +140,7 @@ XP -> XP conj XP
 Pidgin allows you to provide regular expression elements to rules. Such an element
 is a Rust expression which may be converted to a `String` via `to_string` bracketed
 in the `grammar!` macro body by `r(` and `)`, so, for example `r(r"\d+")`. Regex
-elements allow you to regex expressions into the grammar that the grammar formalism
+elements allow you to insert regex expressions into the grammar that the grammar formalism
 doesn't provide itself, like anchors and character classes.
 
 Rust's regular expression engine does not allow the reuse of names in named capturing
@@ -192,7 +192,7 @@ cases were
 | | | |156.43 ms|
 |✓|✓|✓|**2.2982 m**s|
 | |✓|✓|3.9700 ms|
-|✓| |✓|**443.04 us**|
+|✓| |✓|**443.04 µs**|
 | | |✓|1.0646 ms|
 
 The better time is bolded for each pair. The Pidgin regex outperforms the
