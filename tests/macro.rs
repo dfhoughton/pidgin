@@ -243,6 +243,18 @@ fn rule_general_and_specific_flags() {
 }
 
 #[test]
+fn rule_general_and_specific_b_flags() {
+	let g = grammar!{
+		(?b)
+		TOP -> <foo> <foo>
+		foo => (?-b) ("foo")
+	};
+	let matcher = g.matcher().unwrap();
+	assert!(matcher.is_match("foofoo"));
+	assert!(matcher.is_match("foo foo"));
+}
+
+#[test]
 fn multiple_definitions() {
 	let g = grammar!{
 		foo => ("foo")

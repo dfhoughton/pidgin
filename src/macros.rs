@@ -218,7 +218,7 @@ use crate::util::Expression;
 /// #  #[macro_use] extern crate pidgin;
 /// grammar!{
 ///   foo  -> <word>+
-///   word => (?bB) [vec!["cat", "dog", "tortoise"]]
+///   word => (?bB) [["cat", "dog", "tortoise"]]
 /// };
 /// ```
 ///
@@ -990,11 +990,11 @@ impl MacroFlags {
         } else if self.whitespace_maybe.unwrap_or_default() {
             p.normalize_whitespace(false);
         }
-        if self.word_left.unwrap_or_default() {
-            p.left_word_bound();
+        if self.word_left.is_some() {
+            p.left_word_bound(self.word_left.unwrap());
         }
-        if self.word_right.unwrap_or_default() {
-            p.right_word_bound();
+        if self.word_right.is_some() {
+            p.right_word_bound(self.word_right.unwrap());
         }
         p
     }

@@ -153,11 +153,11 @@ impl Pidgin {
             self.foreign_rx_rule(r"\s+", r"\s*", None).unwrap();
         }
     }
-    pub(crate) fn left_word_bound(&mut self) {
-        self.left = true;
+    pub(crate) fn left_word_bound(&mut self, left: bool) {
+        self.left = left;
     }
-    pub(crate) fn right_word_bound(&mut self) {
-        self.right = true;
+    pub(crate) fn right_word_bound(&mut self, right: bool) {
+        self.right = right;
     }
     fn add_boundary_symbols(&self, left: bool, right: bool, phrase: &str) -> Vec<Expression> {
         lazy_static! {
