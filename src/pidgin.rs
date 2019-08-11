@@ -1,8 +1,6 @@
 extern crate regex;
 use crate::grammar::Grammar;
-use crate::util::{
-    character_class_escape, is_atomic, CharRange, Expression, Flags, Symbol,
-};
+use crate::util::{character_class_escape, is_atomic, CharRange, Expression, Flags, Symbol};
 use regex::{Error, Regex};
 use std::cmp::{Ord, Ordering};
 use std::collections::{BTreeMap, BTreeSet};
@@ -15,7 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Pidgin {
-    flags: Flags,
+    pub(crate) flags: Flags,
     left: bool,
     right: bool,
     symbols: BTreeMap<Symbol, Vec<Expression>>,
@@ -28,7 +26,7 @@ impl Pidgin {
     /// matches a newline), unicode-compliant, and not enclosed.
     pub(crate) fn new() -> Pidgin {
         Pidgin {
-            flags: Flags::defaults(),
+            flags: Flags::new(),
             left: false,
             right: false,
             symbols: BTreeMap::new(),
@@ -54,18 +52,24 @@ impl Pidgin {
     /// Compiles the current rule, clearing the alternate list in preparation
     /// for constructing the next rule.
     pub(crate) fn compile(&mut self) -> Grammar {
-        self.compile_bounded(true, true, true)
+        self.compile_bounded(true, true, true, self.flags.merge(&Flags::defaults()))
     }
-    pub(crate) fn compile_bounded(&mut self, left: bool, right: bool, apply_symbols: bool) -> Grammar {
-        let mut phrases = self.init(left, right, apply_symbols);
+    pub(crate) fn compile_bounded(
+        &mut self,
+        left: bool,
+        right: bool,
+        apply_symbols: bool,
+        flags: Flags,
+    ) -> Grammar {
+        let mut phrases = self.init(&flags, left, right, apply_symbols);
         phrases.sort();
         phrases.dedup();
-        let sequence = self.recursive_compile(phrases.as_mut());
+        let sequence = self.recursive_compile(&flags, phrases.as_mut());
         self.phrases.clear();
         Grammar {
             sequence,
             name: None,
-            flags: self.flags.clone(),
+            flags: flags,
             lower_limit: None,
             upper_limit: None,
             stingy: false,
@@ -91,8 +95,8 @@ impl Pidgin {
                         None => None,
                     };
                     let sequence = vec![Expression::Part(pattern.to_string(), false)];
-                    let mut flags = Flags::defaults();
-                    flags.enclosed = !is_atomic(pattern);
+                    let mut flags = Flags::new();
+                    flags.enclosed = Some(!is_atomic(pattern));
                     let g = Grammar {
                         name,
                         sequence,
@@ -108,7 +112,7 @@ impl Pidgin {
             Err(e) => Err(e),
         }
     }
-	pub(crate) fn build_grammar(&mut self, name: &str, components: Vec<Grammar>) -> Grammar {
+    pub(crate) fn build_grammar(&mut self, name: &str, components: Vec<Grammar>) -> Grammar {
         Grammar {
             name: Some(name.to_string()),
             flags: self.flags.clone(),
@@ -120,7 +124,7 @@ impl Pidgin {
                 .map(|g| Expression::Grammar(g.clone(), false))
                 .collect(),
         }
-	}
+    }
     pub(crate) fn remove_rx_rule(&mut self, name: &str) -> Result<(), Error> {
         match Regex::new(name) {
             Err(e) => Err(e),
@@ -131,19 +135,19 @@ impl Pidgin {
         }
     }
     pub(crate) fn case_insensitive(&mut self, case: bool) {
-        self.flags.case_insensitive = case;
+        self.flags.case_insensitive = Some(case);
     }
     pub(crate) fn multi_line(&mut self, case: bool) {
-        self.flags.multi_line = case;
+        self.flags.multi_line = Some(case);
     }
     pub(crate) fn dot_all(&mut self, case: bool) {
-        self.flags.dot_all = case;
+        self.flags.dot_all = Some(case);
     }
     pub(crate) fn unicode(&mut self, case: bool) {
-        self.flags.unicode = case;
+        self.flags.unicode = Some(case);
     }
     pub(crate) fn reverse_greed(&mut self, case: bool) {
-        self.flags.reverse_greed = case;
+        self.flags.reverse_greed = Some(case);
     }
     pub(crate) fn normalize_whitespace(&mut self, required: bool) {
         self.remove_rx_rule(r"\s+").unwrap();
@@ -159,7 +163,13 @@ impl Pidgin {
     pub(crate) fn right_word_bound(&mut self, right: bool) {
         self.right = right;
     }
-    fn add_boundary_symbols(&self, left: bool, right: bool, phrase: &str) -> Vec<Expression> {
+    fn add_boundary_symbols(
+        &self,
+        context: &Flags,
+        left: bool,
+        right: bool,
+        phrase: &str,
+    ) -> Vec<Expression> {
         lazy_static! {
             static ref UNICODE_B: Regex = Regex::new(r"\w").unwrap();
             static ref ASCII_B: Regex = Regex::new(r"(?-U)\w").unwrap();
@@ -168,8 +178,8 @@ impl Pidgin {
             if self.left {
                 if phrase.len() > 0 {
                     let c = phrase[0..1].to_string();
-                    let is_boundary = self.flags.unicode && UNICODE_B.is_match(&c)
-                        || !self.flags.unicode && ASCII_B.is_match(&c);
+                    let u = context.default(&self.flags, "unicode");
+                    let is_boundary = u && UNICODE_B.is_match(&c) || !u && ASCII_B.is_match(&c);
                     if is_boundary {
                         Some(Expression::Part(String::from(r"\b"), false))
                     } else {
@@ -188,8 +198,8 @@ impl Pidgin {
             if self.right {
                 if phrase.len() > 0 {
                     let c = phrase.chars().last().unwrap().to_string();
-                    let is_boundary = self.flags.unicode && UNICODE_B.is_match(&c)
-                        || !self.flags.unicode && ASCII_B.is_match(&c);
+                    let u = context.default(&self.flags, "unicode");
+                    let is_boundary = u && UNICODE_B.is_match(&c) || !u && ASCII_B.is_match(&c);
                     if is_boundary {
                         Some(Expression::Part(String::from(r"\b"), false))
                     } else {
@@ -223,6 +233,7 @@ impl Pidgin {
     // initialize
     fn digest(
         &self,
+        context: &Flags,
         left: bool,
         right: bool,
         apply_symbols: bool,
@@ -281,7 +292,7 @@ impl Pidgin {
         if left && self.left {
             let first = rv.remove(0);
             if let Expression::Raw(s) = first {
-                let mut nv = self.add_boundary_symbols(true, false, &s);
+                let mut nv = self.add_boundary_symbols(context, true, false, &s);
                 while nv.len() > 0 {
                     let e = nv.pop().unwrap();
                     rv.insert(0, e);
@@ -293,7 +304,7 @@ impl Pidgin {
         if right && self.right {
             let last = rv.pop().unwrap();
             if let Expression::Raw(s) = last {
-                for e in self.add_boundary_symbols(false, true, &s) {
+                for e in self.add_boundary_symbols(context, false, true, &s) {
                     rv.push(e);
                 }
             } else {
@@ -313,7 +324,13 @@ impl Pidgin {
         }
         nv
     }
-    fn init(&self, left: bool, right: bool, apply_symbols: bool) -> Vec<Vec<Expression>> {
+    fn init(
+        &self,
+        context: &Flags,
+        left: bool,
+        right: bool,
+        apply_symbols: bool,
+    ) -> Vec<Vec<Expression>> {
         let mut symbols: BTreeMap<Symbol, Expression> = BTreeMap::new();
         for (sym, v) in self.symbols.iter() {
             let mut v = if v.len() > 1 {
@@ -361,10 +378,10 @@ impl Pidgin {
         }
         self.phrases
             .iter()
-            .map(|s| self.digest(left, right, apply_symbols, s, &symbols))
+            .map(|s| self.digest(context, left, right, apply_symbols, s, &symbols))
             .collect()
     }
-    fn condense(&self, mut phrase: Vec<Expression>) -> Vec<Expression> {
+    fn condense(&self, context: &Flags, mut phrase: Vec<Expression>) -> Vec<Expression> {
         if phrase.len() < 2 {
             return phrase;
         }
@@ -387,7 +404,7 @@ impl Pidgin {
                 if match_length > 1 {
                     let s = phrase[i..i + rep_length]
                         .iter()
-                        .map(|e| e.to_s(&self.flags, false, false))
+                        .map(|e| e.to_s(&self.flags.merge(context), false, false))
                         .collect::<Vec<String>>()
                         .join("");
                     let existing_length = s.len();
@@ -432,16 +449,20 @@ impl Pidgin {
         }
         phrase
     }
-    fn recursive_compile(&self, phrases: &mut Vec<Vec<Expression>>) -> Vec<Expression> {
+    fn recursive_compile(
+        &self,
+        context: &Flags,
+        phrases: &mut Vec<Vec<Expression>>,
+    ) -> Vec<Expression> {
         if phrases.len() == 0 {
             return Vec::new();
         }
         if phrases.len() == 1 {
-            return self.condense(phrases[0].clone());
+            return self.condense(context, phrases[0].clone());
         }
         let (prefix, suffix) = self.common_adfixes(phrases);
-        let mut prefix = self.condense(prefix);
-        let mut suffix = self.condense(suffix);
+        let mut prefix = self.condense(context, prefix);
+        let mut suffix = self.condense(context, suffix);
         phrases.sort();
         let mut map: BTreeMap<&Expression, Vec<&Vec<Expression>>> = BTreeMap::new();
         let mut optional = false;
@@ -457,7 +478,7 @@ impl Pidgin {
         let mut rv = Vec::new();
         for (_, ref mut v) in map.iter_mut() {
             let mut v = v.iter().map(|v| (*v).clone()).collect();
-            rv.push(self.recursive_compile(&mut v));
+            rv.push(self.recursive_compile(context, &mut v));
         }
         rv.sort_by(Pidgin::vec_sort);
         rv = self.find_character_classes(rv);

@@ -135,23 +135,91 @@ pub(crate) fn character_class_escape(c: char) -> String {
 
 #[derive(Clone, Debug)]
 pub(crate) struct Flags {
-    pub(crate) case_insensitive: bool,
-    pub(crate) dot_all: bool,
-    pub(crate) multi_line: bool,
-    pub(crate) unicode: bool,
-    pub(crate) reverse_greed: bool,
-    pub(crate) enclosed: bool,
+    pub(crate) case_insensitive: Option<bool>,
+    pub(crate) dot_all: Option<bool>,
+    pub(crate) multi_line: Option<bool>,
+    pub(crate) unicode: Option<bool>,
+    pub(crate) reverse_greed: Option<bool>,
+    pub(crate) enclosed: Option<bool>,
 }
 
 impl Flags {
+    pub(crate) fn new() -> Flags {
+        Flags {
+            case_insensitive: None,
+            dot_all: None,
+            multi_line: None,
+            unicode: None,
+            reverse_greed: None,
+            enclosed: None,
+        }
+    }
     pub(crate) fn defaults() -> Flags {
         Flags {
-            case_insensitive: false,
-            dot_all: false,
-            multi_line: false,
-            unicode: true,
-            reverse_greed: false,
-            enclosed: false,
+            case_insensitive: Some(false),
+            dot_all: Some(false),
+            multi_line: Some(false),
+            unicode: Some(true),
+            reverse_greed: Some(false),
+            enclosed: Some(false),
+        }
+    }
+    // note: disregard enclosed
+    pub(crate) fn differing_flags(&self, other: &Flags) -> bool {
+        self.case_insensitive.is_some()
+            && (self.case_insensitive.unwrap() ^ other.case_insensitive.unwrap())
+            || self.dot_all.is_some() && (self.dot_all.unwrap() ^ other.dot_all.unwrap())
+            || self.multi_line.is_some() && (self.multi_line.unwrap() ^ other.multi_line.unwrap())
+            || self.unicode.is_some() && (self.unicode.unwrap() ^ other.unicode.unwrap())
+            || self.reverse_greed.is_some()
+                && (self.reverse_greed.unwrap() ^ other.reverse_greed.unwrap())
+    }
+    // to be called on a set of fully-specified flags given another flag -- the invocant provides the default
+    pub(crate) fn default(&self, other: &Flags, field: &str) -> bool {
+        match field {
+            "case_insensitive" => other
+                .case_insensitive
+                .unwrap_or(self.case_insensitive.unwrap()),
+            "dot_all" => other.dot_all.unwrap_or(self.dot_all.unwrap()),
+            "multi_line" => other.multi_line.unwrap_or(self.multi_line.unwrap()),
+            "unicode" => other.unicode.unwrap_or(self.unicode.unwrap()),
+            "reverse_greed" => other.reverse_greed.unwrap_or(self.reverse_greed.unwrap()),
+            "enclosed" => other.enclosed.unwrap_or(self.enclosed.unwrap()),
+            _ => unreachable!(),
+        }
+    }
+    pub(crate) fn merge(&self, other: &Flags) -> Flags {
+        Flags {
+            case_insensitive: if self.case_insensitive.is_some() {
+                self.case_insensitive.clone()
+            } else {
+                other.case_insensitive.clone()
+            },
+            dot_all: if self.dot_all.is_some() {
+                self.dot_all.clone()
+            } else {
+                other.dot_all.clone()
+            },
+            multi_line: if self.multi_line.is_some() {
+                self.multi_line.clone()
+            } else {
+                other.multi_line.clone()
+            },
+            unicode: if self.unicode.is_some() {
+                self.unicode.clone()
+            } else {
+                other.unicode.clone()
+            },
+            reverse_greed: if self.reverse_greed.is_some() {
+                self.reverse_greed.clone()
+            } else {
+                other.reverse_greed.clone()
+            },
+            enclosed: if self.enclosed.is_some() {
+                self.enclosed.clone()
+            } else {
+                other.enclosed.clone()
+            },
         }
     }
 }

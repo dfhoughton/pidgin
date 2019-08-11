@@ -58,9 +58,11 @@ lazy_static! {
             + r")\z"),
     )
     .unwrap();
-    static ref PIDGIN_RX_BOUNDED: Regex =grammar!{
+    static ref PIDGIN_RX_BOUNDED: Regex = grammar! {
         TOP => r(r"\A") [&GOOD] r(r"\z")
-    }.rx().unwrap();
+    }
+    .rx()
+    .unwrap();
     static ref NAIVE_RX_UNBOUNDED: Regex = Regex::new(
         &GOOD
             .iter()
@@ -69,9 +71,11 @@ lazy_static! {
             .join("|")
     )
     .unwrap();
-    static ref PIDGIN_RX_UNBOUNDED: Regex = grammar!{
+    static ref PIDGIN_RX_UNBOUNDED: Regex = grammar! {
         TOP => [&GOOD]
-    }.rx().unwrap();
+    }
+    .rx()
+    .unwrap();
 }
 
 fn naive_vs_pidgin(c: &mut Criterion) {

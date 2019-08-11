@@ -1,6 +1,6 @@
 use crate::grammar::Grammar;
 use crate::pidgin::Pidgin;
-use crate::util::Expression;
+use crate::util::{Expression, Flags};
 
 /// Compiles a [`Grammar`].
 ///
@@ -772,7 +772,7 @@ pub fn build_grammar(
                 .enumerate()
                 .map(|(i, p)| match p {
                     Part::R(s) => {
-						let mut g = Grammar::rx_rule(s.to_string());
+                        let mut g = Grammar::rx_rule(s.to_string());
                         if flags.add_space && i != 0 {
                             g = left_pad(g);
                         }
@@ -782,7 +782,12 @@ pub fn build_grammar(
                         let mut g = pidgin
                             .clone()
                             .add(&v.iter().map(|s| s.as_str()).collect::<Vec<_>>())
-                            .compile_bounded(i == 0, i == last_index, true);
+                            .compile_bounded(
+                                i == 0,
+                                i == last_index,
+                                true,
+                                pidgin.flags.merge(&Flags::defaults()),
+                            );
                         if flags.add_space && (i != 0 || low.is_some() || high.is_some()) {
                             g = left_pad(g);
                         }
@@ -834,6 +839,7 @@ pub fn build_grammar(
                             i == 0,
                             i == last_index,
                             false,
+                            pidgin.flags.merge(&Flags::defaults()),
                         );
                         if flags.add_space && (i != 0 || low.is_some() || high.is_some()) {
                             g = left_pad(g);

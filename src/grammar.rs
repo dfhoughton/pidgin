@@ -9,7 +9,7 @@ use std::fmt;
 /// [`Matcher`] or for use in the definition of a new rule.
 ///
 /// You do not build new `Grammar`s directly. Rather, the [`grammar!`] macro compiles them for you.
-/// 
+///
 /// [`Matcher`]:  ../pidgin/struct.Matcher.html
 /// [`grammar!`]: ../pidgin/macro.grammar.html
 
@@ -25,48 +25,48 @@ pub struct Grammar {
 }
 
 impl Grammar {
-	pub(crate) fn rx_rule(rx: String) -> Grammar {
-		Grammar{
-			name: None,
-			flags: Flags::defaults(),
-			stingy: false,
-			lower_limit: None,
-			upper_limit: None,
-			sequence: vec![Expression::Part(rx, false)],
-		}
-	}
+    pub(crate) fn rx_rule(rx: String) -> Grammar {
+        Grammar {
+            name: None,
+            flags: Flags::new(),
+            stingy: false,
+            lower_limit: None,
+            upper_limit: None,
+            sequence: vec![Expression::Part(rx, false)],
+        }
+    }
     pub(crate) fn name(&mut self, name: &str) {
         self.name = Some(name.to_string());
     }
     /// Compiles a `Matcher` based on the `Grammar`'s rules.
     ///
-	/// # Examples
-	/// 
-	/// ```rust
+    /// # Examples
+    ///
+    /// ```rust
     /// # #[macro_use] extern crate pidgin;
     /// # use std::error::Error;
     /// # fn demo() -> Result<(), Box<Error>> {
-	/// let m = grammar!{
-	/// 	(?wbB)
-	/// 	noun   => <person> | <place> | <thing>
-	/// 	person => [["Moe", "Larry", "Curly", "Sade", "Diana Ross"]]
-	/// 	place  => [["Brattleboro, Vermont"]]
-	/// 	thing  => [["tiddly wink", "muffin", "kazoo"]]
-	/// }.matcher()?;
-	/// # Ok(()) }
-	/// ```
-	/// 
+    /// let m = grammar!{
+    /// 	(?wbB)
+    /// 	noun   => <person> | <place> | <thing>
+    /// 	person => [["Moe", "Larry", "Curly", "Sade", "Diana Ross"]]
+    /// 	place  => [["Brattleboro, Vermont"]]
+    /// 	thing  => [["tiddly wink", "muffin", "kazoo"]]
+    /// }.matcher()?;
+    /// # Ok(()) }
+    /// ```
+    ///
     /// # Errors
     ///
     /// If the `Grammar` contains an ill-formed `r(rx)` or one with a named capture
-	/// which is repeated, an error will be returned.
+    /// which is repeated, an error will be returned.
     pub fn matcher(&self) -> Result<Matcher, Error> {
         Matcher::new(&self)
     }
     pub(crate) fn reps_min(&self, r: usize) -> Result<Grammar, String> {
         if self.upper_limit.is_none() || self.lower_limit.unwrap() >= r {
             let mut flags = self.flags.clone();
-            flags.enclosed = true;
+            flags.enclosed = Some(true);
             Ok(Grammar {
                 flags,
                 name: self.name.clone(),
@@ -91,7 +91,7 @@ impl Grammar {
                 ))
             } else {
                 let mut flags = self.flags.clone();
-                flags.enclosed = true;
+                flags.enclosed = Some(true);
                 Ok(Grammar {
                     flags,
                     name: self.name.clone(),
@@ -114,10 +114,11 @@ impl Grammar {
         self
     }
     pub(crate) fn any_suffix(&self) -> bool {
-        (self.lower_limit.is_some() || self.upper_limit.is_some()) && !(self.lower_limit.is_some()
-            && self.upper_limit.is_some()
-            && self.lower_limit.unwrap() == 1
-            && self.upper_limit.unwrap() == 1)
+        (self.lower_limit.is_some() || self.upper_limit.is_some())
+            && !(self.lower_limit.is_some()
+                && self.upper_limit.is_some()
+                && self.lower_limit.unwrap() == 1
+                && self.upper_limit.unwrap() == 1)
     }
     pub(crate) fn repetition_suffix(&self) -> String {
         let stingy_modifier = if self.stingy { "?" } else { "" };
@@ -264,14 +265,9 @@ impl Grammar {
         g.clear_name();
         Regex::new(g.to_string().as_str())
     }
-    fn _describe(&self) -> String {
-        let top = self.sequence.len() == 1;
-        self.sequence
-            .iter()
-            .map(|e| e.to_s(&self.flags, true, top))
-            .collect::<Vec<_>>()
-            .join("")
-    }
+    // the root stringification method
+    // because we pass the default flags in here, at any point hereafter
+    // we will have some definition of every flag
     pub(crate) fn to_string(&self) -> String {
         self.to_s(&Flags::defaults(), false, false)
     }
@@ -290,17 +286,14 @@ impl Grammar {
         self.name = None;
     }
     fn needs_closure(&self, context: &Flags) -> bool {
-        self.flags.enclosed
+        self.flags.enclosed.unwrap_or(false)
             || self.needs_flags_set(context)
-            || self.any_suffix() && !(self.sequence.len() == 1
-                && is_atomic(&self.sequence[0].to_s(context, true, true)))
+            || self.any_suffix()
+                && !(self.sequence.len() == 1
+                    && is_atomic(&self.sequence[0].to_s(&self.flags.merge(context), true, true)))
     }
     fn needs_flags_set(&self, context: &Flags) -> bool {
-        self.flags.case_insensitive ^ context.case_insensitive
-            || self.flags.dot_all ^ context.dot_all
-            || self.flags.multi_line ^ context.multi_line
-            || self.flags.unicode ^ context.unicode
-            || self.flags.reverse_greed ^ context.reverse_greed
+        self.flags.differing_flags(context)
     }
     // flag string when needed
     fn flags(&self, context: &Flags) -> String {
@@ -309,36 +302,36 @@ impl Grammar {
         }
         let mut flags_on = Vec::with_capacity(4);
         let mut flags_off = Vec::with_capacity(4);
-        if self.flags.case_insensitive ^ context.case_insensitive {
-            if self.flags.case_insensitive {
+        if let Some(b) = choose_flag(&self.flags.case_insensitive, &context.case_insensitive) {
+            if b {
                 flags_on.push("i");
             } else {
                 flags_off.push("i");
             }
         }
-        if self.flags.multi_line ^ context.multi_line {
-            if self.flags.multi_line {
+        if let Some(b) = choose_flag(&self.flags.multi_line, &context.multi_line) {
+            if b {
                 flags_on.push("m");
             } else {
                 flags_off.push("m");
             }
         }
-        if self.flags.dot_all ^ context.dot_all {
-            if self.flags.dot_all {
+        if let Some(b) = choose_flag(&self.flags.dot_all, &context.dot_all) {
+            if b {
                 flags_on.push("s");
             } else {
                 flags_off.push("s");
             }
         }
-        if self.flags.unicode ^ context.unicode {
-            if !self.flags.unicode {
-                flags_off.push("u");
-            } else {
+        if let Some(b) = choose_flag(&self.flags.unicode, &context.unicode) {
+            if b {
                 flags_on.push("u");
+            } else {
+                flags_off.push("u");
             }
         }
-        if self.flags.reverse_greed ^ context.reverse_greed {
-            if self.flags.reverse_greed {
+        if let Some(b) = choose_flag(&self.flags.reverse_greed, &context.reverse_greed) {
+            if b {
                 flags_on.push("U");
             } else {
                 flags_off.push("U");
@@ -365,7 +358,7 @@ impl Grammar {
             s = s + format!("(?{}:", self.flags(context)).as_str();
         }
         for e in &self.sequence {
-            s += e.to_s(&self.flags, describing, top).as_ref();
+            s += e.to_s(&self.flags.merge(context), describing, top).as_ref();
         }
         if !closure_skippable && self.needs_closure(context) {
             s = s + ")"
@@ -374,6 +367,14 @@ impl Grammar {
             s = s + ")"
         }
         s + self.repetition_suffix().as_str()
+    }
+}
+
+fn choose_flag(o1: &Option<bool>, o2: &Option<bool>) -> Option<bool> {
+    if o1.is_some() && (o1.unwrap() ^ o2.unwrap()) {
+        o1.clone()
+    } else {
+        None
     }
 }
 
