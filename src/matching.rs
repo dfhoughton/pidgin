@@ -1,4 +1,5 @@
 extern crate regex;
+extern crate serde_regex;
 use crate::grammar::Grammar;
 use crate::util::{Expression, Flags};
 use regex::{Captures, Error, Regex};
@@ -13,9 +14,10 @@ use std::collections::HashMap;
 ///
 /// [`Regex`]: ../regex/struct.Regex.html
 /// [`Match`]: ../pidgin/struct.Match.html
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Matcher {
     /// The `Regex` used for parsing.
+    #[serde(with = "serde_regex")]
     pub rx: Regex,
     root: String,
     translation: HashMap<String, String>,

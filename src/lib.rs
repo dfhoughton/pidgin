@@ -122,6 +122,8 @@ parse a string to produce a [`Match`] parse tree.
 extern crate regex;
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate serde;
 
 mod grammar;
 #[macro_use]

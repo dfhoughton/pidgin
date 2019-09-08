@@ -2,9 +2,10 @@
 #![recursion_limit = "256"]
 #[macro_use]
 extern crate pidgin;
-use pidgin::Grammar;
+use pidgin::{Grammar, Matcher};
 extern crate regex;
 use regex::Regex;
+extern crate serde_json;
 
 fn count_matches(rx: &str, g: &Grammar) -> usize {
     Regex::new(rx)
@@ -866,4 +867,20 @@ fn no_unicode() {
     let non_ascii = p.all_names("non_ascii");
     assert_eq!("789", ascii[0].as_str());
     assert_eq!("૦", non_ascii[0].as_str());
+}
+
+#[test]
+fn matcher_serialization() {
+    let matcher = grammar! {
+        TOP => <foo> <bar> <foo>
+        foo => ("foo")
+        bar => ("bar")
+    }
+    .matcher()
+    .unwrap();
+    let serialized = serde_json::to_string(&matcher).unwrap();
+    let matcher: Matcher = serde_json::from_str(&serialized).unwrap();
+    let p = matcher.parse("foobarfoo").unwrap();
+    assert_eq!(2, p.all_names("foo").len());
+    assert_eq!(1, p.all_names("bar").len());
 }
