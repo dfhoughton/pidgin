@@ -1,6 +1,6 @@
 [package]
 name = "pidgin"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["dfhoughton <dfhoughton@gmail.com>"]
 description= "simple non-recursive grammars"
 homepage = "https://github.com/dfhoughton/pidgin"
@@ -9,7 +9,7 @@ documentation = "https://docs.rs/pidgin"
 readme = "README.md"
 keywords = [ "grammar", "regex", "parsing" ]
 categories = [ "parsing", "text-processing" ]
-license = "GPL-2.0"
+license = "MIT"
 edition = "2018"
 
 [profile.release]

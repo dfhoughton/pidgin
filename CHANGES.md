@@ -1,5 +1,7 @@
 # Change Log
 
+## 0.4.1 *2021-3-28*
+* switch to MIT license
 ## 0.3.0
 * fixed bug whereby specific `(?-b)` was not overriding general `(?b)`
 ## 0.3.1
