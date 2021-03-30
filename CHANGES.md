@@ -1,5 +1,7 @@
 # Change Log
 
+## 0.4.2 *2021-3-30*
+* reverting ill-advised removal of a `mut`
 ## 0.4.1 *2021-3-28*
 * switch to MIT license
 ## 0.3.0

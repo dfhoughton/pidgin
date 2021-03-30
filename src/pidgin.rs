@@ -598,7 +598,7 @@ impl Pidgin {
         };
         (prefix, suffix)
     }
-    fn find_character_classes(&self, phrases: Vec<Vec<Expression>>) -> Vec<Vec<Expression>> {
+    fn find_character_classes(&self, mut phrases: Vec<Vec<Expression>>) -> Vec<Vec<Expression>> {
         let mut char_count = 0;
         for v in &phrases {
             if v.len() > 1 {
