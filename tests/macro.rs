@@ -1,4 +1,3 @@
-#![feature(test)]
 #![recursion_limit = "256"]
 #[macro_use]
 extern crate pidgin;
@@ -20,7 +19,7 @@ fn foo_bar() {
         foo => ("bar")
     };
     let matcher = g.matcher().unwrap();
-    assert!(matcher.is_match("bar"), format!("{}", g));
+    assert!(matcher.is_match("bar"), "{}", g);
     let p = matcher.parse("bar").unwrap();
     assert_eq!(p.as_str(), "bar");
     assert!(p.name("foo").is_some());
@@ -33,7 +32,7 @@ fn foo_foo() {
         foo => ("foo")
     };
     let matcher = g.matcher().unwrap();
-    assert!(matcher.is_match("foo"), format!("{}", g));
+    assert!(matcher.is_match("foo"), "{}", g);
     let p = matcher.parse("foo").unwrap();
     assert_eq!(p.as_str(), "foo");
     assert!(p.name("foo").is_some());
@@ -46,7 +45,7 @@ fn foo_foo2() {
         foo => ("foo"){2}
     };
     let matcher = g.matcher().unwrap();
-    assert!(matcher.is_match("foofoo"), format!("{}", g));
+    assert!(matcher.is_match("foofoo"), "{}", g);
     let p = matcher.parse("foofoo").unwrap();
     assert_eq!(p.as_str(), "foofoo");
     assert!(p.name("foo").is_some());
@@ -59,12 +58,12 @@ fn foo_maybe_bar() {
         foo => ("foo")? ("bar")
     };
     let matcher = g.matcher().unwrap();
-    assert!(matcher.is_match("foobar"), format!("{}", g));
+    assert!(matcher.is_match("foobar"), "{}", g);
     let p = matcher.parse("foobar").unwrap();
     assert_eq!(p.as_str(), "foobar");
     assert!(p.name("foo").is_some());
     assert_eq!(p.all_names("foo").len(), 1, "simple parse tree");
-    assert!(matcher.is_match("bar"), format!("{}", g));
+    assert!(matcher.is_match("bar"), "{}", g);
     let p = matcher.parse("bar").unwrap();
     assert_eq!(p.as_str(), "bar");
     assert!(p.name("foo").is_some());
@@ -77,17 +76,17 @@ fn foo_star_bar() {
         foo => ("foo")* ("bar")
     };
     let matcher = g.matcher().unwrap();
-    assert!(matcher.is_match("foofoobar"), format!("{}", g));
+    assert!(matcher.is_match("foofoobar"), "{}", g);
     let p = matcher.parse("foofoobar").unwrap();
     assert_eq!(p.as_str(), "foofoobar");
     assert!(p.name("foo").is_some());
     assert_eq!(p.all_names("foo").len(), 1, "simple parse tree");
-    assert!(matcher.is_match("foobar"), format!("{}", g));
+    assert!(matcher.is_match("foobar"), "{}", g);
     let p = matcher.parse("foobar").unwrap();
     assert_eq!(p.as_str(), "foobar");
     assert!(p.name("foo").is_some());
     assert_eq!(p.all_names("foo").len(), 1, "simple parse tree");
-    assert!(matcher.is_match("bar"), format!("{}", g));
+    assert!(matcher.is_match("bar"), "{}", g);
     let p = matcher.parse("bar").unwrap();
     assert_eq!(p.as_str(), "bar");
     assert!(p.name("foo").is_some());
@@ -100,17 +99,17 @@ fn foo_plus_bar() {
         foo => ("foo")+ ("bar")
     };
     let matcher = g.matcher().unwrap();
-    assert!(matcher.is_match("foofoobar"), format!("{}", g));
+    assert!(matcher.is_match("foofoobar"), "{}", g);
     let p = matcher.parse("foofoobar").unwrap();
     assert_eq!(p.as_str(), "foofoobar");
     assert!(p.name("foo").is_some());
     assert_eq!(p.all_names("foo").len(), 1, "simple parse tree");
-    assert!(matcher.is_match("foobar"), format!("{}", g));
+    assert!(matcher.is_match("foobar"), "{}", g);
     let p = matcher.parse("foobar").unwrap();
     assert_eq!(p.as_str(), "foobar");
     assert!(p.name("foo").is_some());
     assert_eq!(p.all_names("foo").len(), 1, "simple parse tree");
-    assert!(!matcher.is_match("bar"), format!("{}", g));
+    assert!(!matcher.is_match("bar"), "{}", g);
 }
 
 #[test]
@@ -119,17 +118,17 @@ fn foo_at_least_2_bar() {
         foo => ("foo"){2,} ("bar")
     };
     let matcher = g.matcher().unwrap();
-    assert!(matcher.is_match("foofoobar"), format!("{}", g));
+    assert!(matcher.is_match("foofoobar"), "{}", g);
     let p = matcher.parse("foofoobar").unwrap();
     assert_eq!(p.as_str(), "foofoobar");
     assert!(p.name("foo").is_some());
     assert_eq!(p.all_names("foo").len(), 1, "simple parse tree");
-    assert!(matcher.is_match("foofoofoobar"), format!("{}", g));
+    assert!(matcher.is_match("foofoofoobar"), "{}", g);
     let p = matcher.parse("foofoofoobar").unwrap();
     assert_eq!(p.as_str(), "foofoofoobar");
     assert!(p.name("foo").is_some());
     assert_eq!(p.all_names("foo").len(), 1, "simple parse tree");
-    assert!(!matcher.is_match("foobar"), format!("{}", g));
+    assert!(!matcher.is_match("foobar"), "{}", g);
 }
 
 #[test]
@@ -138,27 +137,27 @@ fn foo_at_2_to_4_bar() {
         foo => ("foo"){2,4} ("bar")
     };
     let matcher = g.matcher().unwrap();
-    assert!(matcher.is_match("foofoobar"), format!("{}", g));
+    assert!(matcher.is_match("foofoobar"), "{}", g);
     let p = matcher.parse("foofoobar").unwrap();
     assert_eq!(p.as_str(), "foofoobar");
     assert!(p.name("foo").is_some());
     assert_eq!(p.all_names("foo").len(), 1, "simple parse tree");
-    assert!(matcher.is_match("foofoofoobar"), format!("{}", g));
+    assert!(matcher.is_match("foofoofoobar"), "{}", g);
     let p = matcher.parse("foofoofoobar").unwrap();
     assert_eq!(p.as_str(), "foofoofoobar");
     assert!(p.name("foo").is_some());
     assert_eq!(p.all_names("foo").len(), 1, "simple parse tree");
-    assert!(matcher.is_match("foofoofoofoobar"), format!("{}", g));
+    assert!(matcher.is_match("foofoofoofoobar"), "{}", g);
     let p = matcher.parse("foofoofoofoobar").unwrap();
     assert_eq!(p.as_str(), "foofoofoofoobar");
     assert!(p.name("foo").is_some());
     assert_eq!(p.all_names("foo").len(), 1, "simple parse tree");
-    assert!(matcher.is_match("foofoofoofoofoobar"), format!("{}", g));
+    assert!(matcher.is_match("foofoofoofoofoobar"), "{}", g);
     let p = matcher.parse("foofoofoofoofoobar").unwrap();
     assert_eq!(p.as_str(), "foofoofoofoobar");
     assert!(p.name("foo").is_some());
     assert_eq!(p.all_names("foo").len(), 1, "simple parse tree");
-    assert!(!matcher.is_match("foobar"), format!("{}", g));
+    assert!(!matcher.is_match("foobar"), "{}", g);
 }
 
 #[test]
@@ -167,12 +166,12 @@ fn foo_bar_foo() {
         foo => ("bar") | ("foo")
     };
     let matcher = g.matcher().unwrap();
-    assert!(matcher.is_match("bar"), format!("{}", g));
+    assert!(matcher.is_match("bar"), "{}", g);
     let p = matcher.parse("bar").unwrap();
     assert_eq!(p.as_str(), "bar");
     assert!(p.name("foo").is_some());
     assert_eq!(p.all_names("foo").len(), 1, "simple parse tree");
-    assert!(matcher.is_match("foo"), format!("{}", g));
+    assert!(matcher.is_match("foo"), "{}", g);
     let p = matcher.parse("foo").unwrap();
     assert_eq!(p.as_str(), "foo");
     assert!(p.name("foo").is_some());

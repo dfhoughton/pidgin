@@ -19,10 +19,11 @@ fn make_words(count: usize) -> Vec<String> {
     let mut seen = HashSet::with_capacity(count);
     let mut v = Vec::with_capacity(count);
     loop {
-        let size = rng.gen_range(5, 30);
+        let size = rng.gen_range(5..30);
         let s: String = iter::repeat(())
             .map(|()| rng.sample(Alphanumeric))
             .take(size)
+            .map(|n| String::from_utf8(vec![n]).unwrap())
             .collect();
         if !seen.contains(&s) {
             seen.insert(s.clone());
@@ -146,7 +147,7 @@ fn naive_vs_pidgin(c: &mut Criterion) {
         pidgin_good_unbounded,
         pidgin_bad_unbounded,
     ];
-    c.bench_functions("naive_rx_vs_pidgin", functions, &20);
+    c.bench_functions("naive_rx_vs_pidgin", functions, &120);
 }
 
 criterion_group!(benches, naive_vs_pidgin);

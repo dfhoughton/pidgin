@@ -165,6 +165,9 @@ regular expressions its `[vec]` elements generate generally match as well as or 
 naively constructed regular expressions represented as alternations of
 expressions.
 
+[**NOTE**: It appears that since I wrote this section `regex` has been optimized
+further and the edge for pidgin-optimized regexen is negligible. ]
+
 ```rust
 // good
 let rx = regex::Regex::new("cat|camel|canteloupe").unwrap();
