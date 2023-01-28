@@ -7,7 +7,7 @@ extern crate pidgin;
 extern crate rand;
 extern crate regex;
 
-use criterion::{Criterion, Fun};
+use criterion::{BenchmarkId, Criterion};
 use rand::distributions::Alphanumeric;
 use rand::prelude::*;
 use regex::Regex;
@@ -80,74 +80,64 @@ lazy_static! {
 }
 
 fn naive_vs_pidgin(c: &mut Criterion) {
-    let naive_good = Fun::new("naive_good_bounded", |b, _| {
-        b.iter(|| {
-            for ref w in GOOD.iter() {
-                NAIVE_RX_BOUNDED.is_match(&w);
-            }
-        })
-    });
-    let pidgin_good = Fun::new("pidgin_good_bounded", |b, _| {
-        b.iter(|| {
-            for ref w in GOOD.iter() {
-                PIDGIN_RX_BOUNDED.is_match(&w);
-            }
-        })
-    });
-    let naive_bad = Fun::new("naive_bad_bounded", |b, _| {
-        b.iter(|| {
-            for ref w in BAD.iter() {
-                NAIVE_RX_BOUNDED.is_match(&w);
-            }
-        })
-    });
-    let pidgin_bad = Fun::new("pidgin_bad_bounded", |b, _| {
-        b.iter(|| {
-            for ref w in BAD.iter() {
-                PIDGIN_RX_BOUNDED.is_match(&w);
-            }
-        })
-    });
-    let naive_good_unbounded = Fun::new("naive_good_unbounded", |b, _| {
-        b.iter(|| {
-            for ref w in GOOD.iter() {
-                NAIVE_RX_UNBOUNDED.is_match(&w);
-            }
-        })
-    });
-    let pidgin_good_unbounded = Fun::new("pidgin_good_unbounded", |b, _| {
-        b.iter(|| {
-            for ref w in GOOD.iter() {
-                PIDGIN_RX_UNBOUNDED.is_match(&w);
-            }
-        })
-    });
-    let naive_bad_unbounded = Fun::new("naive_bad_unbounded", |b, _| {
-        b.iter(|| {
-            for ref w in BAD.iter() {
-                NAIVE_RX_UNBOUNDED.is_match(&w);
-            }
-        })
-    });
-    let pidgin_bad_unbounded = Fun::new("pidgin_bad_unbounded", |b, _| {
-        b.iter(|| {
-            for ref w in BAD.iter() {
-                PIDGIN_RX_UNBOUNDED.is_match(&w);
-            }
-        })
-    });
+    let mut group = c.benchmark_group("naive_rx_vs_pidgin");
 
-    let functions = vec![
-        naive_good,
-        naive_bad,
-        pidgin_good,
-        pidgin_bad,
-        naive_good_unbounded,
-        naive_bad_unbounded,
-        pidgin_good_unbounded,
-        pidgin_bad_unbounded,
-    ];
-    c.bench_functions("naive_rx_vs_pidgin", functions, &120);
+    group.bench_function(BenchmarkId::new("naive_good", "bounded"), |b| {
+        b.iter(|| {
+            for ref w in GOOD.iter() {
+                NAIVE_RX_BOUNDED.is_match(&w);
+            }
+        })
+    });
+    group.bench_function(BenchmarkId::new("pidgin_good", "bounded"), |b| {
+        b.iter(|| {
+            for ref w in GOOD.iter() {
+                PIDGIN_RX_BOUNDED.is_match(&w);
+            }
+        })
+    });
+    group.bench_function(BenchmarkId::new("naive_bad", "bounded"), |b| {
+        b.iter(|| {
+            for ref w in BAD.iter() {
+                NAIVE_RX_BOUNDED.is_match(&w);
+            }
+        })
+    });
+    group.bench_function(BenchmarkId::new("pidgin_bad", "bounded"), |b| {
+        b.iter(|| {
+            for ref w in BAD.iter() {
+                PIDGIN_RX_BOUNDED.is_match(&w);
+            }
+        })
+    });
+    group.bench_function(BenchmarkId::new("naive_good", "unbounded"), |b| {
+        b.iter(|| {
+            for ref w in GOOD.iter() {
+                NAIVE_RX_UNBOUNDED.is_match(&w);
+            }
+        })
+    });
+    group.bench_function(BenchmarkId::new("pidgin_good", "unbounded"), |b| {
+        b.iter(|| {
+            for ref w in GOOD.iter() {
+                PIDGIN_RX_UNBOUNDED.is_match(&w);
+            }
+        })
+    });
+    group.bench_function(BenchmarkId::new("naive_bad", "unbounded"), |b| {
+        b.iter(|| {
+            for ref w in BAD.iter() {
+                NAIVE_RX_UNBOUNDED.is_match(&w);
+            }
+        })
+    });
+    group.bench_function(BenchmarkId::new("pidgin_bad", "unbounded"), |b| {
+        b.iter(|| {
+            for ref w in BAD.iter() {
+                PIDGIN_RX_UNBOUNDED.is_match(&w);
+            }
+        })
+    });
 }
 
 criterion_group!(benches, naive_vs_pidgin);

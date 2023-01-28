@@ -1,5 +1,8 @@
 # Change Log
 
+## 0.4.4 *2023-1-28*
+* addressing warnings found by cargo-audit
+* adjusted the benchmark documentation in light of changes
 ## 0.4.3 *2021-7-3*
 * some modernization
 ## 0.4.2 *2021-3-30*

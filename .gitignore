@@ -3,3 +3,4 @@
 Cargo.lock
 tokamak.toml
 .project
+**/.DS_Store
